@@ -12,7 +12,7 @@ macro "Add Multiple Lines of SEM Metadata to ImageJ Info Header" {
 	getPixelSize(unit, pixelWidth, pixelHeight);
 	metaTagArray = ExtractZeissSEMmetadata();
 	metaTagArray = Array.sort(metaTagArray);
-	for (metaInfo = "", i = 0; i<metaTagArray.length; i++) {
+	for (metaInfo = "", i = 0; i<lengthOf(metaTagArray); i++) {
 		metaInfo += metaTagArray[i]+"\n";
 		if (unit=="" || pixelWidth==1 || pixelHeight==1) {
 			if (matches(metaTagArray[i], ".*Image Pixel Size =.*")) {
@@ -54,19 +54,19 @@ macro "Add Multiple Lines of SEM Metadata to ImageJ Info Header" {
 		}
 		else {
 			pluginList = getFileList(pluginDir);
-			subFolderList = newArray(pluginList.length);
-			for (i=0; i<pluginList.length; i++) {
+			subFolderList = newArray(lengthOf(pluginList));
+			for (i=0; i<lengthOf(pluginList); i++) {
 				if (endsWith(pluginList[i], "/")) {
 					subFolderList[subFolderCount] = pluginList[i];
 					subFolderCount = subFolderCount +1;
 				}
 			}
 			subFolderList = Array.slice(subFolderList, 0, subFolderCount);
-			for (i=0; i<subFolderList.length; i++) {
+			for (i=0; i<lengthOf(subFolderList); i++) {
 				if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
 					pluginCheck = true;
 					showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-					i = subFolderList.length;
+					i = lengthOf(subFolderList);
 				}
 			}
 		}
@@ -84,8 +84,8 @@ macro "Add Multiple Lines of SEM Metadata to ImageJ Info Header" {
 		if (dir=="") exit ("path not available");
 		name = getInfo("image.filename");
 		if (name=="") exit ("name not available");
-		if (!matches(getInfo("image.filename"),".*[tT][iI][fF].*")) exit("Not TIFF file");
-		if (!checkForPlugin("tiff_tags.jar")) exit("Not TIFF file");
+		if (!matches(getInfo("image.filename"),".*[tT][iI][fF].*")) exit("Not a TIFF file \(original Zeiss TIFF file required\)");
+		if (!checkForPlugin("tiff_tags.jar")) exit("Not a TIFF file \(original Zeiss TIFF file required\)");
 		path = dir + name;
 		fullTag = call("TIFF_Tags.getTag", path, "34118");
 		metaTagStart = indexOf(fullTag, "DP_ZOOM");
@@ -97,7 +97,7 @@ macro "Add Multiple Lines of SEM Metadata to ImageJ Info Header" {
 			tag = replace(tag, "AP_", "|AP_");
 			tag = replace(tag, "SV_", "|SV_");
 			metaArray = split(tag, "|");
-			for (i=0; i<metaArray.length; i++)
+			for (i=0; i<lengthOf(metaArray); i++)
 				metaArray[i] = substring(metaArray[i], indexOf(metaArray[i], " ")+1);
 		}
 		return metaArray;

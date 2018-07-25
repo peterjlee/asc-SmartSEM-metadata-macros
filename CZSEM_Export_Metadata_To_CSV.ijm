@@ -24,10 +24,10 @@ macro "Export Carl Zeiss SEM metadata" {
 	tag = replace(tag, "AP_", "|AP_");
 	tag = replace(tag, "SV_", "|SV_");
 	metaArray = split(tag, "|");
-	parameterArray = newArray(metaArray.length);
-	valueArray =  newArray(metaArray.length);
-	unitArray =  newArray(metaArray.length);
-	for (i=0; i<metaArray.length; i ++) {
+	parameterArray = newArray(lengthOf(metaArray));
+	valueArray =  newArray(lengthOf(metaArray));
+	unitArray =  newArray(lengthOf(metaArray));
+	for (i=0; i<lengthOf(metaArray); i ++) {
 		metaArray[i] = substring(metaArray[i], indexOf(metaArray[i], " "));
 		errorPos = indexOf(metaArray[i], " Error ");
 		if (errorPos>0) metaArray[i] = replace(metaArray[i], "Error", "=");
@@ -41,8 +41,8 @@ macro "Export Carl Zeiss SEM metadata" {
 			valueArray[i] = "NA";
 		}
 		splitValue = split(valueArray[i]);
-		if (splitValue.length>0) valueArray[i] = splitValue[0];
-		if (splitValue.length>1) unitArray[i] = splitValue[1];
+		if (lengthOf(splitValue)>0) valueArray[i] = splitValue[0];
+		if (lengthOf(splitValue)>1) unitArray[i] = splitValue[1];
 		else unitArray[i] = "";
 		if (errorPos>0) unitArray[i] = "error"; // override with error if noted
 		setResult("Parameter", i, parameterArray[i]);
