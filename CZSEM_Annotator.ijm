@@ -5,6 +5,7 @@
 	Peter J. Lee Applied Superconductivity Center at National High Magnetic Field Laboratory.
 	Version v170411 removes spaces in image names to fix issue with new image combinations.
 	v180725 Adds system fonts to font list.
+	v190506 Removed redundant functions.
  */
 macro "Add Multiple Lines of SEM Metadata to Image" {
 	/* We will assume you are using an up to date imageJ */
@@ -130,19 +131,19 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 /*	*/
 	if (tweakFormat=="Yes") {	
 		Dialog.create("Advanced Formatting Options");
-		Dialog.addNumber("X Offset from Edge in Pixels \(applies to corners only\)", selOffsetX,0,1,"pixels");
-		Dialog.addNumber("Y Offset from Edge in Pixels \(applies to corners only\)", selOffsetY,0,1,"pixels");
+		Dialog.addNumber("X offset from edge \(for corners only\)", selOffsetX,0,1,"pixels");
+		Dialog.addNumber("Y offset from edge \(for corners only\)", selOffsetY,0,1,"pixels");
 		Dialog.addNumber("Line Spacing", lineSpacing,0,3,"");
-		Dialog.addNumber("Outline Stroke:", outlineStroke,0,3,"% of font size");
+		Dialog.addNumber("Outline stroke:", outlineStroke,0,3,"% of font size");
 		Dialog.addChoice("Outline (background) color:", colorChoice, colorChoice[1]);
-		Dialog.addNumber("Shadow Drop: ±", shadowDrop,0,3,"% of font size");
-		Dialog.addNumber("Shadow Displacement Right: ±", shadowDrop,0,3,"% of font size");
-		Dialog.addNumber("Shadow Gaussian Blur:", floor(0.75 * shadowDrop),0,3,"% of font size");
+		Dialog.addNumber("Shadow drop: ±", shadowDrop,0,3,"% of font size");
+		Dialog.addNumber("Shadow displacement right: ±", shadowDrop,0,3,"% of font size");
+		Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDrop),0,3,"% of font size");
 		Dialog.addNumber("Shadow Darkness:", 75,0,3,"%\(darkest = 100%\)");
 		// Dialog.addMessage("The following \"Inner Shadow\" options do not change the Overlay Labels");
-		Dialog.addNumber("Inner Shadow Drop: ±", dIShO,0,3,"% of font size");
-		Dialog.addNumber("Inner Displacement Right: ±", dIShO,0,3,"% of font size");
-		Dialog.addNumber("Inner Shadow Mean Blur:",floor(dIShO/2),1,3,"% of font size");
+		Dialog.addNumber("Inner shadow drop: ±", dIShO,0,3,"% of font size");
+		Dialog.addNumber("Inner displacement right: ±", dIShO,0,3,"% of font size");
+		Dialog.addNumber("Inner shadow mean blur:",floor(dIShO/2),1,3,"% of font size");
 		Dialog.addNumber("Inner Shadow Darkness:", 20,0,3,"% \(darkest = 100%\)");
 	
 		Dialog.show();
@@ -236,18 +237,16 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	if ((endX+selOffsetX)>imageWidth) selEX = imageWidth - longestStringWidth - selOffsetX;
 	textLabelX = selEX;
 	textLabelY = selEY;
-	setColorFromColorName("white");
 	setBatchMode(true);
 	roiManager("show none");
-	// run("Flatten"); /* changes bit depth */
 	run("Duplicate...", t+"+text");
 	labeledImage = getTitle();
-	// if (is("Batch Mode")==false) setBatchMode(true);
 	newImage("label_mask", "8-bit black", imageWidth, imageHeight, 1);
 	roiManager("deselect");
 	run("Select None");
 	/* Draw summary over top of labels */
 	setFont(fontName,fontSize, fontStyle);
+	setColor(255,255,255);
 	for (i=0; i<textOutNumber; i++) {
 		// if (textInputLines[i]!="None") textOutNumber = textOutNumber + 1;
 		if (textInputLines[i]!="-blank-") {
@@ -502,10 +501,6 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		else if (colorName == "violet_modern") cA = newArray(76,65,132);
 		else if (colorName == "yellow_modern") cA = newArray(247,238,69);
 		return cA;
-	}
-	function setColorFromColorName(colorName) {
-		colorArray = getColorArrayFromColorName(colorName);
-		setColor(colorArray[0], colorArray[1], colorArray[2]);
 	}
 	function setBackgroundFromColorName(colorName) {
 		colorArray = getColorArrayFromColorName(colorName);
