@@ -6,8 +6,10 @@
 	Version v170411 removes spaces in image names to fix issue with new image combinations.
 	v180725 Adds system fonts to font list.
 	v190506 Removed redundant functions.
+	+ v200706 Changed imageDepth variable name added macro label.	
  */
 macro "Add Multiple Lines of SEM Metadata to Image" {
+	macroL = "CZSEM_Annotator_v200706f1";
 	/* We will assume you are using an up to date imageJ */
 	saveSettings;
 	setBatchMode(true);
@@ -59,7 +61,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	imageWidth = getWidth();
 	imageHeight = getHeight();
 	imageDims = imageHeight + imageWidth;
-	originalImageDepth = bitDepth();
+	imageDepth = bitDepth();
 	id = getImageID();
 	fontSize = round(imageDims/140); /* default font size is small for this variant */
 	if (fontSize < 10) fontSize = 10; /* set minimum default font size as 12 */
@@ -77,7 +79,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	selOffsetX = round(1 + imageWidth/150); /* default offset of label from edge */
 	selOffsetY = round(1 + imageHeight/150); /* default offset of label from edge */
 	/* Then Dialog . . . */
-	Dialog.create("Basic Label Options");
+	Dialog.create("Basic Label Options: " + macroL);
 		if (selectionExists==1) {
 			textLocChoices = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection", "At Selection"); 
 			loc = 6;
@@ -93,7 +95,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			Dialog.addNumber("Selection Bounds: Height = ", selEHeight);
 		}
 		Dialog.addNumber("Font size & color:", fontSize, 0, 3,"");
-		if (originalImageDepth==24)
+		if (imageDepth==24)
 			colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern"); 
 		else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
 		Dialog.setInsets(-30, 60, 0);
@@ -348,7 +350,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		}
 	}
 	function createInnerShadowFromMask() {
-		/* Requires previous run of: originalImageDepth = bitDepth();
+		/* Requires previous run of: imageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161104 */
 		showStatus("Creating inner shadow for labels . . . ");
@@ -368,14 +370,14 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		imageCalculator("Max", "inner_shadow","label_mask");
 		run("Select None");
 		/* The following are needed for different bit depths */
-		if (originalImageDepth==16 || originalImageDepth==32) run(originalImageDepth + "-bit");
+		if (imageDepth==16 || imageDepth==32) run(imageDepth + "-bit");
 		run("Enhance Contrast...", "saturated=0 normalize");
 		run("Invert");  /* Create an image that can be subtracted - this works better for color than Min */
 		divider = (100 / abs(innerShadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
 	function createShadowDropFromMask() {
-		/* Requires previous run of: originalImageDepth = bitDepth();
+		/* Requires previous run of: imageDepth = bitDepth();
 		because this version works with different bitDepths
 		v161104 */
 		showStatus("Creating drop shadow for labels . . . ");
@@ -398,7 +400,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		run("Clear");
 		run("Select None");
 		/* The following are needed for different bit depths */
-		if (originalImageDepth==16 || originalImageDepth==32) run(originalImageDepth + "-bit");
+		if (imageDepth==16 || imageDepth==32) run(imageDepth + "-bit");
 		run("Enhance Contrast...", "saturated=0 normalize");
 		divider = (100 / abs(shadowDarkness));
 		run("Divide...", "value=[divider]");
@@ -556,21 +558,68 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			IJ.renameResults("Results");
 		}
 	}
-	function unCleanLabel(string) { 
-	/* v161104 This function replaces special characters with standard characters for file system compatible filenames */
-	/* mod 041117 to remove spaces as well */
+	function unCleanLabel(string) {
+	/* v161104 This function replaces special characters with standard characters for file system compatible filenames.
+	+ 041117b to remove spaces as well.
+	+ v220126 added getInfo("micrometer.abbreviation").
+	+ v220128 add loops that allow removal of multiple duplication.
+	+ v220131 fixed so that suffix cleanup works even if extensions are included.
+	*/
+		/* Remove bad characters */
 		string= replace(string, fromCharCode(178), "\\^2"); /* superscript 2 */
 		string= replace(string, fromCharCode(179), "\\^3"); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(185), "\\^-1"); /* superscript -1 */
-		string= replace(string, fromCharCode(0x207B) + fromCharCode(178), "\\^-2"); /* superscript -2 */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(185), "\\^-1"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
+		string= replace(string, fromCharCode(0xFE63) + fromCharCode(178), "\\^-2"); /* Small hyphen substituted for superscript minus as 0x207B does not display in table */
 		string= replace(string, fromCharCode(181), "u"); /* micron units */
+		string= replace(string, getInfo("micrometer.abbreviation"), "um"); /* micron units */
 		string= replace(string, fromCharCode(197), "Angstrom"); /* Ångström unit symbol */
 		string= replace(string, fromCharCode(0x2009) + fromCharCode(0x00B0), "deg"); /* replace thin spaces degrees combination */
 		string= replace(string, fromCharCode(0x2009), "_"); /* Replace thin spaces  */
+		string= replace(string, "%", "pc"); /* % causes issues with html listing */
 		string= replace(string, " ", "_"); /* Replace spaces - these can be a problem with image combination */
+		/* Remove duplicate strings */
+		unwantedDupes = newArray("8bit","lzw");
+		for (i=0; i<lengthOf(unwantedDupes); i++){
+			iLast = lastIndexOf(string,unwantedDupes[i]);
+			iFirst = indexOf(string,unwantedDupes[i]);
+			if (iFirst!=iLast) {
+				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDupes[i]));
+				i=-1; /* check again */
+			}
+		}
+		unwantedDbls = newArray("_-","-_","__","--","\\+\\+");
+		for (i=0; i<lengthOf(unwantedDbls); i++){
+			iFirst = indexOf(string,unwantedDbls[i]);
+			if (iFirst>=0) {
+				string = substring(string,0,iFirst) + substring(string,iFirst + lengthOf(unwantedDbls[i])/2);
+				i=-1; /* check again */
+			}
+		}
 		string= replace(string, "_\\+", "\\+"); /* Clean up autofilenames */
-		string= replace(string, "\\+\\+", "\\+"); /* Clean up autofilenames */
-		string= replace(string, "__", "_"); /* Clean up autofilenames */
+		/* cleanup suffixes */
+		unwantedSuffixes = newArray(" ","_","-","\\+"); /* things you don't wasn't to end a filename with */
+		extStart = lastIndexOf(string,".");
+		sL = lengthOf(string);
+		if (sL-extStart<=4) extIncl = true;
+		else extIncl = false;
+		if (extIncl){
+			preString = substring(string,0,extStart);
+			extString = substring(string,extStart);
+		}
+		else {
+			preString = string;
+			extString = "";
+		}
+		for (i=0; i<lengthOf(unwantedSuffixes); i++){
+			sL = lengthOf(preString);
+			if (endsWith(preString,unwantedSuffixes[i])) { 
+				preString = substring(preString,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
+				i=-1; /* check one more time */
+			}
+		}
+		if (!endsWith(preString,"_lzw") && !endsWith(preString,"_lzw.")) preString = replace(preString, "_lzw", ""); /* Only want to keep this if it is at the end */
+		string = preString + extString;
+		/* End of suffix cleanup */
 		return string;
 	}
 }
