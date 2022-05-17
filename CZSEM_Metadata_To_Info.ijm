@@ -3,7 +3,11 @@ macro "Add Multiple Lines of SEM Metadata to ImageJ Info Header" {
 	This requires the tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
 	Originally it was based on the scale extracting macro here: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt but as usual things got a little out of hand . . . 
 	Peter J. Lee Applied Superconductivity Center at National High Magnetic Field Laboratory
-	Version v161105 */
+	Version v161105 
+	v180215-f1 functions updated: 5/16/2022 12:50 PM
+	*/
+	macroL = "CZSEM_Metadata_to_Info_v180215-f1.ijm";
+	saveSettings; /* for restoreExit */	
 	setBatchMode(true);
 	dir = getDirectory("image");
 	name = getInfo("image.filename");
@@ -27,6 +31,7 @@ macro "Add Multiple Lines of SEM Metadata to ImageJ Info Header" {
 	else if(lengthOf(imagejInfo)!=lengthOf(replace(imagejInfo,"SmartSEM",""))) exit("SmartSEM metadata already embedded");
 	else {
 		Dialog.create("Add to existing info label?");
+			Dialog.addMessage("Macro: " + macroL);
 			if(lengthOf(imagejInfo)>30) imagejInfoShort = substring(imagejInfo,0,30) + "...";
 			else imagejInfoShort = imagejInfo;
 			Dialog.addCheckbox("Add to existing info?: " + imagejInfoShort, true);
@@ -43,30 +48,37 @@ macro "Add Multiple Lines of SEM Metadata to ImageJ Info Header" {
 	( 8(|)   ( 8(|)  Functions  ( 8(|)  ( 8(|)
 */
 	function checkForPlugin(pluginName) {
-		/* v161102 changed to true-false */
-		var pluginCheck = false, subFolderCount = 0;
+		/* v161102 changed to true-false
+			v180831 some cleanup
+			v210429 Expandable array version
+			v220510 Looks for both class and jar if no extension is given */
+		var pluginCheck = false;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
-		if (!endsWith(pluginName, ".jar")) pluginName = pluginName + ".jar";
-		if (File.exists(pluginDir + pluginName)) {
+		pExts = newArray(".jar",".class");
+		pluginNameO = pluginName;
+		for (j=0; j<lengthOf(pExts); j++){
+			pluginName = pluginNameO;
+			if (!endsWith(pluginName,pExts[0]) && !endsWith(pluginName,pExts[1])) pluginName = pluginName + pExts[j];
+			if (File.exists(pluginDir + pluginName)) {
 				pluginCheck = true;
 				showStatus(pluginName + "found in: "  + pluginDir);
-		}
-		else {
-			pluginList = getFileList(pluginDir);
-			subFolderList = newArray(lengthOf(pluginList));
-			for (i=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")) {
-					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount = subFolderCount +1;
-				}
 			}
-			subFolderList = Array.slice(subFolderList, 0, subFolderCount);
-			for (i=0; i<lengthOf(subFolderList); i++) {
-				if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
-					pluginCheck = true;
-					showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-					i = lengthOf(subFolderList);
+			else {
+				pluginList = getFileList(pluginDir);
+				subFolderList = newArray;
+				for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
+					if (endsWith(pluginList[i], "/")) {
+						subFolderList[subFolderCount] = pluginList[i];
+						subFolderCount++;
+					}
+				}
+				for (i=0; i<lengthOf(subFolderList); i++) {
+					if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
+						pluginCheck = true;
+						showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
+						i = lengthOf(subFolderList);
+					}
 				}
 			}
 		}

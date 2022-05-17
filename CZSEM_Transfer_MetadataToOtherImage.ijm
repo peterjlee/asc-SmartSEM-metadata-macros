@@ -2,7 +2,9 @@ macro "Copy SmartSEM Metadata to ImageJ Info Header of Another Open Image" {
 	/* 	This macro copies SmartSEM metadata from one image to the ImageJ info header of another open image
 	This requires the tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
 	Peter J. Lee Applied Superconductivity Center at National High Magnetic Field Laboratory
-	Version v161106 */
+	Version v180215-f1 function updates 5/16/2022 12:52 PM  */
+	macroL = "CZSEM_Metadata_to_Info_v180215-f1.ijm";
+	saveSettings; /* for restoreExit */	
 	setBatchMode(true);
 	t = getTitle();
 	metaTagArray = ExtractZeissSEMmetadata();
@@ -33,6 +35,7 @@ macro "Copy SmartSEM Metadata to ImageJ Info Header of Another Open Image" {
 	else if (lengthOf(imagejInfo)!=lengthOf(replace(imagejInfo,"SmartSEM",""))) exit("SmartSEM metadata already embedded");
 	else {
 		Dialog.create("Add to existing info label?");
+			Dialog.addMessage("Macro: " + macroL);
 			if(lengthOf(imagejInfo)>30) imagejInfoShort = substring(imagejInfo,0,30) + "...";
 			else imagejInfoShort = imagejInfo;
 			Dialog.addCheckbox("Add to existing info?: " + imagejInfoShort, true);
@@ -49,34 +52,42 @@ macro "Copy SmartSEM Metadata to ImageJ Info Header of Another Open Image" {
 	// print(getMetadata("Info")); /* For testing */
 	setBatchMode("exit & display");
 	showStatus("SmartSEM metadata copy macro finished");
+}
 /* 
 	( 8(|)   ( 8(|)  Functions  ( 8(|)  ( 8(|)
 */
 	function checkForPlugin(pluginName) {
-		/* v161102 changed to true-false */
-		var pluginCheck = false, subFolderCount = 0;
+		/* v161102 changed to true-false
+			v180831 some cleanup
+			v210429 Expandable array version
+			v220510 Looks for both class and jar if no extension is given */
+		var pluginCheck = false;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
-		if (!endsWith(pluginName, ".jar")) pluginName = pluginName + ".jar";
-		if (File.exists(pluginDir + pluginName)) {
+		pExts = newArray(".jar",".class");
+		pluginNameO = pluginName;
+		for (j=0; j<lengthOf(pExts); j++){
+			pluginName = pluginNameO;
+			if (!endsWith(pluginName,pExts[0]) && !endsWith(pluginName,pExts[1])) pluginName = pluginName + pExts[j];
+			if (File.exists(pluginDir + pluginName)) {
 				pluginCheck = true;
 				showStatus(pluginName + "found in: "  + pluginDir);
-		}
-		else {
-			pluginList = getFileList(pluginDir);
-			subFolderList = newArray(lengthOf(pluginList));
-			for (i=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")) {
-					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount = subFolderCount +1;
-				}
 			}
-			subFolderList = Array.slice(subFolderList, 0, subFolderCount);
-			for (i=0; i<lengthOf(subFolderList); i++) {
-				if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
-					pluginCheck = true;
-					showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-					i = lengthOf(subFolderList);
+			else {
+				pluginList = getFileList(pluginDir);
+				subFolderList = newArray;
+				for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
+					if (endsWith(pluginList[i], "/")) {
+						subFolderList[subFolderCount] = pluginList[i];
+						subFolderCount++;
+					}
+				}
+				for (i=0; i<lengthOf(subFolderList); i++) {
+					if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
+						pluginCheck = true;
+						showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
+						i = lengthOf(subFolderList);
+					}
 				}
 			}
 		}
@@ -84,12 +95,12 @@ macro "Copy SmartSEM Metadata to ImageJ Info Header of Another Open Image" {
 	}
 	function ExtractZeissSEMmetadata() {
 	/* This macro extracts the metadata from the TIFF file header of an Zeiss SEM image.
- it is based on the scale extracting macro here: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt
- This requires the tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
- There is an example image available at http://rsbweb.nih.gov/ij/images/SmartSEMSample.tif
- See also the original Nabble post by Pablo Manuel Jais: http://imagej.1557.x6.nabble.com/Importing-SEM-images-with-scale-td3689900.html This version: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt
- This version v161101 Peter J. Lee
-*/
+	 it is based on the scale extracting macro here: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt
+	 This requires the tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
+	 There is an example image available at http://rsbweb.nih.gov/ij/images/SmartSEMSample.tif
+	 See also the original Nabble post by Pablo Manuel Jais: http://imagej.1557.x6.nabble.com/Importing-SEM-images-with-scale-td3689900.html This version: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt
+	 This version v161101 Peter J. Lee
+	*/
 		dir = getDirectory("image");
 		if (dir=="") exit ("path not available");
 		name = getInfo("image.filename");
@@ -112,4 +123,3 @@ macro "Copy SmartSEM Metadata to ImageJ Info Header of Another Open Image" {
 		}
 		return metaArray;
 	}
-}

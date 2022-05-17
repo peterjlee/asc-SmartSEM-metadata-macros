@@ -6,12 +6,12 @@
 	Version v170411 removes spaces in image names to fix issue with new image combinations.
 	v180725 Adds system fonts to font list.
 	v190506 Removed redundant functions.
-	+ v200706 Changed imageDepth variable name added macro label.	
+	+ v200706 Changed imageDepth variable name added macro label.	5/16/2022 12:46 PM latest function updates
  */
 macro "Add Multiple Lines of SEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v200706-f3.ijm";
+	macroL = "CZSEM_Annotator_v200706-f4.ijm";
 	/* We will assume you are using an up to date imageJ */
-	saveSettings;
+	saveSettings; /* for restoreExit */	
 	setBatchMode(true);
 	if (selectionType>=0) {
 		selEType = selectionType; 
@@ -298,29 +298,35 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	function checkForPlugin(pluginName) {
 		/* v161102 changed to true-false
 			v180831 some cleanup
-			v210429 Expandable array version */
+			v210429 Expandable array version
+			v220510 Looks for both class and jar if no extension is given */
 		var pluginCheck = false;
 		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
 		else pluginDir = getDirectory("plugins");
-		if (!endsWith(pluginName, ".jar")) pluginName = pluginName + ".jar";
-		if (File.exists(pluginDir + pluginName)) {
+		pExts = newArray(".jar",".class");
+		pluginNameO = pluginName;
+		for (j=0; j<lengthOf(pExts); j++){
+			pluginName = pluginNameO;
+			if (!endsWith(pluginName,pExts[0]) && !endsWith(pluginName,pExts[1])) pluginName = pluginName + pExts[j];
+			if (File.exists(pluginDir + pluginName)) {
 				pluginCheck = true;
 				showStatus(pluginName + "found in: "  + pluginDir);
-		}
-		else {
-			pluginList = getFileList(pluginDir);
-			subFolderList = newArray;
-			for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
-				if (endsWith(pluginList[i], "/")) {
-					subFolderList[subFolderCount] = pluginList[i];
-					subFolderCount++;
-				}
 			}
-			for (i=0; i<lengthOf(subFolderList); i++) {
-				if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
-					pluginCheck = true;
-					showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-					i = lengthOf(subFolderList);
+			else {
+				pluginList = getFileList(pluginDir);
+				subFolderList = newArray;
+				for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
+					if (endsWith(pluginList[i], "/")) {
+						subFolderList[subFolderCount] = pluginList[i];
+						subFolderCount++;
+					}
+				}
+				for (i=0; i<lengthOf(subFolderList); i++) {
+					if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
+						pluginCheck = true;
+						showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
+						i = lengthOf(subFolderList);
+					}
 				}
 			}
 		}

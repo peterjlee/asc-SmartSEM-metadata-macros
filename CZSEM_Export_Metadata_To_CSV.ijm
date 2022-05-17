@@ -4,9 +4,10 @@
  There is an example image available at http://rsbweb.nih.gov/ij/images/SmartSEMSample.tif
  See also the original Nabble post by Pablo Manuel Jais: http://imagej.1557.x6.nabble.com/Importing-SEM-images-with-scale-td3689900.html This version: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt
  Original version v161101 Peter J. Lee
- v161105 expands comments
+ v161105 expands comments     updated functions: 5/17/2022 9:49 AM
 */
 macro "Export Carl Zeiss SEM metadata" {
+	macroL = "CZSEM_Export_Metadata_to_CSV_v180215-f1.ijm";
 	setBatchMode(true);
 	hideResultsAs("hiddenResults"); /* A new results table will be used for this macro */
 	/* Next obtain path+name of the active image to determine name and location for experted csv file */
@@ -58,13 +59,17 @@ macro "Export Carl Zeiss SEM metadata" {
 	run("Close");
 	restoreResultsFrom("hiddenResults");
 	setBatchMode("exit & display"); /* exit batch mode */
+	showStatus("CZSEM metadata export finished: " + macroL);
+}
 	/* 
 	( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
 	*/
-	function closeNonImageByTitle(windowTitle) { // obviously
-	if (isOpen(windowTitle)) {
-		selectWindow(windowTitle);
-        run("Close");
+	function closeNonImageByTitle(windowTitle) {
+	/*  v200925 uses "while" instead of if so it can also remove duplicates
+	*/
+		while (isOpen(windowTitle)) {
+			selectWindow(windowTitle);
+			run("Close");
 		}
 	}
 	function hideResultsAs(deactivatedResults) {
@@ -80,14 +85,14 @@ macro "Export Carl Zeiss SEM metadata" {
 		}
 	}
 	function saveExcelFile(outputDir, outputName, outputResultsTable) {
+	/* v190116 corrected typo in resultsPath */
 		selectWindow(outputResultsTable);
-		resultsPath = outputDir + outputName + "_" + outputResultsTable + ".xls";
+		resultsPath = outputDir + outputName + "_" + outputResultsTable + "_" + getDateCode() + ".csv"; /* CSV behaves better with Excel 2016 than XLS */
 		if (File.exists(resultsPath)==0)
-			saveAs("results", resultsPath);
+			saveAs("Results", resultsPath);
 		else {
 			overWriteFile=getBoolean("Do you want to overwrite " + resultsPath + "?");
 			if(overWriteFile==1)
-					saveAs("results", resultsPath);
+					saveAs("Results", resultsPath);
 		}		
 	}
-}
