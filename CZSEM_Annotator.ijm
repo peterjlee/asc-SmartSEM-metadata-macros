@@ -6,10 +6,10 @@
 	Version v170411 removes spaces in image names to fix issue with new image combinations.
 	v180725 Adds system fonts to font list.
 	v190506 Removed redundant functions.
-	+ v200706 Changed imageDepth variable name added macro label.	5/16/2022 12:46 PM latest function updates
+	+ v200706 Changed imageDepth variable name added macro label.	5/16/2022 12:46 PM latest function updates f5: updated pad function
  */
 macro "Add Multiple Lines of SEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v200706-f4.ijm";
+	macroL = "CZSEM_Annotator_v200706-f5.ijm";
 	/* We will assume you are using an up to date imageJ */
 	saveSettings; /* for restoreExit */	
 	setBatchMode(true);
@@ -569,7 +569,17 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		 return hexName;
 	}
 	function pad(n) {
-		n= toString(n); if (lengthOf(n)==1) n= "0"+n; return n;
+		/* v220603 required for versions >1.53s32 as "toString" outputs a string as NaN in those versions rather than passing through the string */
+		l = lengthOf(n);
+		s = "";
+		for (i = 0; i < l; i++){
+			v = substring(n,i,i+1);
+			w = toString(v);
+			if (w==NaN) w = v;
+			s += w;
+		}
+		if (lengthOf(s)==1) s = "0" + s;
+		return s;
 	}
 		
 	/*	End of Color Functions	*/
