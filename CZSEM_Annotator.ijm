@@ -6,12 +6,13 @@
 	Version v170411 removes spaces in image names to fix issue with new image combinations.
 	v180725 Adds system fonts to font list.
 	v190506 Removed redundant functions.
-	+ v200706 Changed imageDepth variable name added macro label.	6/7/2022 11:05 AM latest function updates f6: updated pad function
+	+ v200706 Changed imageDepth variable name added macro label.	5/16/2022 12:46 PM latest function updates f6: updated pad function.
+	+ v220629-30 Switched to using Bio-Formats to extract headers as newer CZSEM headers are too long for "TIFF_Tags.getTag", path, "34118". Removed no-longer used functions
+		Unfortunately characters do not import correctly from Bioformats so an additional edit is typically required.
  */
 macro "Add Multiple Lines of SEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v200706-f6.ijm";
+	macroL = "CZSEM_Annotator_v220701.ijm";
 	/* We will assume you are using an up to date imageJ */
-	saveSettings; /* for restoreExit */	
 	setBatchMode(true);
 	if (selectionType>=0) {
 		selEType = selectionType; 
@@ -21,48 +22,147 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	else selectionExists = 0;
 	t=getTitle();
 	// Checks to see if a Ramp legend rather than the image has been selected by accident
-	if (matches(t, ".*Ramp.*")==1) showMessageWithCancel("Title contains \"Ramp\"", "Do you want to label" + t + " ?"); 
-	metaTagArray = ExtractZeissSEMmetadata();
-	metaTagArray = Array.sort(metaTagArray);
-	imagejInfo = getMetadata("Info");
-	if (imagejInfo=="") {  /* if Info tag is empty adds SEM metadata to imageJ info tag */
-		metaInfo = "SmartSEM Tags\n----------\n";
-		for (i = 0; i<lengthOf(metaTagArray); i++)
-			metaInfo += metaTagArray[i]+"\n";
-		setMetadata("Info", metaInfo);
-	}
-	else if (lengthOf(imagejInfo)==lengthOf(replace(imagejInfo,"SmartSEM",""))){	
-		Dialog.create("Add SmartSEM metadata to existing non-SmartSEM imageJ info tag?");
-			if(lengthOf(imagejInfo)>30) imagejInfoShort = substring(imagejInfo,0,30) + "...";
-			else imagejInfoShort = imagejInfo;
-			Dialog.addCheckbox("Add to existing info?: " + imagejInfoShort, true);
-			Dialog.show;
-			imagejInfoAdd = Dialog.getCheckbox;
-		if (imagejInfoAdd) {  /* Adds SEM metadata to end of existing imageJ info tag */
-			metaInfo = imagejInfo + "\n----------\nSmartSEM Tags\n----------\n";
-			for (i = 0; i<lengthOf(metaTagArray); i++)
-				metaInfo += metaTagArray[i]+"\n";
-			setMetadata("Info", metaInfo);
+	if (matches(t, ".*Ramp.*")==1) showMessageWithCancel("Title contains \"Ramp\"", "Do you want to label" + t + " ?");
+	orInfo = getMetadata("Info");
+	iSEMName = indexOf(orInfo,"Sem = ");
+	orPath = getDir("image") + getInfo("image.filename");
+	if(iSEMName<0){
+		/* If the standard CZ SEM info is missing use BioFormats to retrieve metaData */
+		if(File.exists(orPath)) {
+			run("Bio-Formats", "open=[" + orPath + "] color_mode=Default rois_import=[ROI manager] view=[Standard ImageJ] stack_order=Default");
+			bioFMeta = getMetadata("Info");
+			close();
+			setMetadata("Info",bioFMeta);
 		}
 	}
-	// print(getMetadata("Info")); /* For testing purposes */
-	favoriteParameters = newArray("Aperture Size =", "Brightness =", "Contrast =", "EHT =", "WD =", "Date :", "Time :", "Height =", "Width =", "Image Pixel Size =", "Mag =", "Signal A =", "Noise Reduction =",  "Scan Speed =", "Cycle Time =", "Line Time =", "N", "Line Avg.Count", "Stage at T =", "Tilt Angle =", "Tilt Corrn. =", "Scan Rotation =", "Stage Angle =", "Stage at X =", "Stage at Y =",  "Stage at Z =", "User Name =", "File Name =");  /* not used: , "Sample ID ="  */
-	textChoiceLines = lengthOf(favoriteParameters); /* Number of optional lines */
-	if (lengthOf(metaTagArray)<(213+textChoiceLines)) restoreExit("Header appears to be non-standard"); 
-	for (i = 0; i<lengthOf(favoriteParameters); i++) {
-		for (j = 0; j<lengthOf(metaTagArray); j++) {
-			if(matches(metaTagArray[j], favoriteParameters[i]+".*"))
-				favoriteParameters[i] = metaTagArray[j];
-		} 
+	orInfo = getMetadata("Info");
+	SEMName = getValueFromImageInfo(orInfo,"Sem = ",10,0,"Not found");
+	if (SEMName=="Not found") exit("SEM metadata was not found for the selected image");
+	/* Find bad characters */
+	degTxt = "?";
+	muTxt = "?";
+	sup2 = "?";
+	if(indexOf(orInfo,"?")>=0 || indexOf(orInfo,"?")>=0) badCharFound = true;
+	else badCharFound = false;
+	iDeg1 = indexOf(orInfo,"Temperature");
+	if (iDeg1>0) {
+		degTxt1 = substring(orInfo,iDeg1, iDeg1+20);
+		iDeg2 = indexOf(degTxt1,"C");
+		if(iDeg2>0) degTxt = substring(degTxt1,iDeg2-1,iDeg2);
 	}
+	iMu1 = indexOf(orInfo,"Aperture Size");
+	if (iMu1>0){
+		muTxt1 = substring(orInfo,iMu1, iMu1+25);
+		iMu2 = indexOf(muTxt1,"m");
+		if(iMu2>0) muTxt = substring(muTxt1,iMu2-1,iMu2);
+	}
+	iSup2a = indexOf(orInfo,"Db 1");
+	if (iSup2a>0){
+		sup2Txt1 = substring(orInfo,iSup2a, iSup2a+15);
+		iSup2b = indexOf(sup2Txt1,"nm");
+		if(iSup2b>0) sup2Txt = substring(sup2Txt1,iSup2b+2,iSup2b+3);
+	}
+	infoLines = split(orInfo, "\n");
+	lInfoLines = lengthOf(infoLines);
+	fParams1 = newArray("SEM: ","Date: ", "Time: ", "Sample ID: ", "User Name: ", "File Name: ","Photo No. : ","EHT: ");
+	fStageParams = newArray("Stage at T: ", "Tilt Angle: ", "Tilt Corrn.: ", "Stage Angle: ", "Stage at X: ", "Stage at Y: ",  "Stage at Z: ");
+	fImageParams = newArray("Signal A: ","Image Pixel Size: ", "Mag: ","Height: ", "Width: ", "Brightness: ", "Contrast: ");
+	fBeamParams = newArray("Fil I: ", "WD: ", "Aperture Size: ");
+	fScanParams = newArray("Noise Reduction: ", "Scan Speed: ","Cycle Time: ","Line Time: ", "N", "Line Avg.Count","Scan Rotation: ");
+	favoriteParameters = Array.concat(fParams1,fBeamParams,fImageParams,fScanParams,fStageParams);
+	// print(lInfoLines);
+	/* clean up headers for uniformity */
+	fInfoLines = newArray;
+	for (i=0,j=0;i<lInfoLines;i++){  /* clean up SmartSEM headers for uniformity */
+		showProgress(i,lInfoLines);
+		showStatus("Unifying format...");
+		filteredTag = replace(infoLines[i],"="," : ");
+		if (startsWith(filteredTag,"Sem ")) filteredTag = replace(filteredTag,"Sem ","SEM ");
+		filteredTag = replace(filteredTag,":"," : ");
+		while (indexOf(filteredTag,"  ")>=0) filteredTag = replace(filteredTag,"  "," ");
+		filteredTag = replace(filteredTag," : ",": ");
+		/* try to fix issues with BioFormats symbols . . .  Not successful so far */
+		if(badCharFound){
+			showStatus("Fixing bad symbol: " + badSymbol);
+			// if (endsWith(filteredTag," " + degTxt)) filteredTag = replace(filteredTag," " + degTxt, fromCharCode(0x00B0)+fromCharCode(0x2009));
+			// else if (endsWith(filteredTag," " + degTxt+"C"))) filteredTag = replace(filteredTag," " + degTxt+"C", " " + fromCharCode(0x00B0)+fromCharCode(0x2009) + "C");
+			// else if (endsWith(filteredTag," " + muTxt+"m")) filteredTag = replace(filteredTag," " + muTxt+"m", " " + getInfo("micrometer.abbreviation"));
+			// else if (endsWith(filteredTag," " + muTxt+"A"," ")) filteredTag = replace(filteredTag," " + muTxt+"A", " " + fromCharCode(0x03BC) + "A");
+			if (endsWith(filteredTag," " + degTxt)) filteredTag = replace(filteredTag," " + degTxt, " degrees");
+			else if (endsWith(filteredTag," nm" + sup2Txt)) filteredTag = replace(filteredTag," nm" + sup2Txt, " nm^2");
+			else if (endsWith(filteredTag," " + degTxt+"C"))) filteredTag = replace(filteredTag," " + degTxt+"C", " degrees C");
+			else if (endsWith(filteredTag," " + muTxt+"m")) filteredTag = replace(filteredTag," " + muTxt+"m", " um"));
+			else if (endsWith(filteredTag," " + muTxt+"A"," ")) filteredTag = replace(filteredTag," " + muTxt+"A", " uA");
+		}
+		if (indexOf(filteredTag,":")>0){
+			fInfoLines[j] = filteredTag;
+			j++;
+		}
+	}
+	showStatus("Format unified");
+	infoLines = Array.sort(fInfoLines);
+	metaParameters = newArray();
+	metaValues = newArray();
+	metaTags = newArray();
+	zeissSEMName = "";
+	smartSEMVersion = "";
+	smartSEMVNo = 0;
+	for (i=0,j=0;i<lInfoLines;i++){
+		showProgress(i,lInfoLines);
+		showStatus("Filtering parameters...");
+		iValue = indexOf(infoLines[i],"=");
+		if (iValue<0)iValue = indexOf(infoLines[i],":");
+		if (iValue>0){
+			parameter = substring(infoLines[i],0,iValue);
+			paraFilters = newArray(" ","Argon ","Cryo ","Flood Gun ","Pa ","Pb ","AP_AS","Stage goto","Stage high","Stage low", "Nano Tips");
+			for(k=0,go=true;k<lengthOf(paraFilters);k++){
+				if(startsWith(parameter,paraFilters[k])){
+					go = false;
+					k = lengthOf(paraFilters);
+				}
+			}
+			while(endsWith(parameter," ")) parameter = substring(parameter,0,lengthOf(parameter)-1);
+			if(go) {
+				value = substring(infoLines[i],iValue+1);
+				while(startsWith(value," ")) value = substring(value,1);
+				while(endsWith(value," ")) value = substring(value,0,lengthOf(value)-1);
+				if (value!=""){
+					metaValues[j] = value;
+					metaParameters[j] = parameter;
+					// metaTags[j] = infoLines[i];
+					metaTags[j] = parameter + ": " + value;
+					if (startsWith(parameter, "SEM: ")) zeissSEMName = value;
+					if (startsWith(parameter, "Version = ")){
+						smartSEMVersion = "" + value;
+						smartSEMVNo = parseInt(substring(value, indexOf(value,"V")+1,indexOf(value,".")));
+						// print(smartSEMVersion,smartSEMVNo);
+					}
+					j++;
+				}
+			}
+		}
+	}
+	lMetaTags = j;
+	lFPs = lengthOf(favoriteParameters);
+	favoriteAnnos = newArray();
+	for(i=0,f=0;i<lFPs;i++){
+		showProgress(i,lFPs);
+		showStatus("Assembling favorite parameters...");
+		for(j=0;j<lMetaTags;j++){
+			if (startsWith(metaTags[j],favoriteParameters[i])){
+				favoriteAnnos[f] = metaTags[j];
+				f++;
+			}
+		}
+	}
+	fLines = f;
 	alternativeChoices = newArray("-none-", "-blank-", "-user input-");
-	textChoices = Array.concat(alternativeChoices, favoriteParameters, alternativeChoices, metaTagArray);
-	textChoiceLines = textChoiceLines-2;
+	textChoices = Array.concat(alternativeChoices, favoriteAnnos, alternativeChoices, metaTags);
+	textChoiceLines = minOf(screenHeight / 48, fLines);
 	imageWidth = getWidth();
 	imageHeight = getHeight();
 	imageDims = imageHeight + imageWidth;
 	imageDepth = bitDepth();
-	id = getImageID();
 	fontSize = round(imageDims/140); /* default font size is small for this variant */
 	if (fontSize < 10) fontSize = 10; /* set minimum default font size as 12 */
 	lineSpacing = 1.1;
@@ -79,7 +179,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	selOffsetX = round(1 + imageWidth/150); /* default offset of label from edge */
 	selOffsetY = round(1 + imageHeight/150); /* default offset of label from edge */
 	/* Then Dialog . . . */
-	Dialog.create("Basic Label Options: " + macroL);
+	Dialog.create(zeissSEMName + " Basic Label Options: " + macroL);
 		if (selectionExists==1) {
 			textLocChoices = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection", "At Selection"); 
 			loc = 6;
@@ -105,10 +205,14 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		fontNameChoice = getFontChoiceList();
 		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
 		Dialog.addChoice("Outline color:", colorChoice, colorChoice[1]);
-		Dialog.setInsets(-60, 420, 0);
-		Dialog.addMessage("Labels: ^2 & um etc. replaced by " + fromCharCode(178) + " & " + fromCharCode(181) + "m etc. If \nthe units are in the nparameter label, within \(...\) \ni.e. \(unit\) they will override this selection:");
-		for (i=0; i<textChoiceLines; i++)
+		Dialog.addNumber("Limit to first",textChoiceLines,0,3,"lines");
+		Dialog.addCheckbox("Edit all entries in next dialog \(correct symbols etc.\)?",true);
+		for (i=0; i<textChoiceLines; i++){
+			showProgress(i,textChoiceLines);
+			showStatus("Creating parameter selection dialog list...");
 			Dialog.addChoice("Line "+(i+1)+":", textChoices, textChoices[i+3]);
+		}
+		showStatus("Created parameter selection dialog list");
 		Dialog.addChoice("Tweak the Formatting? ", newArray("Yes", "No"), "No");
 		Dialog.setInsets(-30, 250, 0);
 		Dialog.addMessage("Pull down for more options: User-input, blank lines and ALL other parameters");
@@ -126,29 +230,30 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		fontStyle = Dialog.getChoice();
 		fontName = Dialog.getChoice();
 		outlineColor = Dialog.getChoice();
+		textChoiceLines = Dialog.getNumber();
 		textInputLines = newArray(textChoiceLines);
+		editAll = Dialog.getCheckbox();
 		for (i=0; i<textChoiceLines; i++)
 			textInputLines[i] = Dialog.getChoice();
 		tweakFormat = Dialog.getChoice();
 /*	*/
 	if (tweakFormat=="Yes") {	
-		Dialog.create("Advanced Formatting Options");
+	Dialog.create("Advanced Formatting Options");
 		Dialog.addNumber("X offset from edge \(for corners only\)", selOffsetX,0,1,"pixels");
 		Dialog.addNumber("Y offset from edge \(for corners only\)", selOffsetY,0,1,"pixels");
 		Dialog.addNumber("Line Spacing", lineSpacing,0,3,"");
 		Dialog.addNumber("Outline stroke:", outlineStroke,0,3,"% of font size");
 		Dialog.addChoice("Outline (background) color:", colorChoice, colorChoice[1]);
-		Dialog.addNumber("Shadow drop: ±", shadowDrop,0,3,"% of font size");
-		Dialog.addNumber("Shadow displacement right: ±", shadowDrop,0,3,"% of font size");
+		Dialog.addNumber("Shadow drop: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size"); /* ï¿½ symbol: 0x00B1 plus/minus */
+		Dialog.addNumber("Shadow displacement right: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size");
 		Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDrop),0,3,"% of font size");
 		Dialog.addNumber("Shadow Darkness:", 75,0,3,"%\(darkest = 100%\)");
 		// Dialog.addMessage("The following \"Inner Shadow\" options do not change the Overlay Labels");
-		Dialog.addNumber("Inner shadow drop: ±", dIShO,0,3,"% of font size");
-		Dialog.addNumber("Inner displacement right: ±", dIShO,0,3,"% of font size");
+		Dialog.addNumber("Inner shadow drop: " + fromCharCode(0x00B1), dIShO,0,3,"% of font size");
+		Dialog.addNumber("Inner displacement right: " + fromCharCode(0x00B1), dIShO,0,3,"% of font size");
 		Dialog.addNumber("Inner shadow mean blur:",floor(dIShO/2),1,3,"% of font size");
 		Dialog.addNumber("Inner Shadow Darkness:", 20,0,3,"% \(darkest = 100%\)");
-	
-		Dialog.show();
+	Dialog.show();
 		selOffsetX = Dialog.getNumber();
 		selOffsetY = Dialog.getNumber();
 		lineSpacing = Dialog.getNumber();
@@ -163,15 +268,14 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		innerShadowBlur = Dialog.getNumber();
 		innerShadowDarkness = Dialog.getNumber();
 	}
-	
 	negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
+	showStatus("Preparing annotation...");
 	if (shadowDrop<0) shadowDrop *= negAdj;
 	if (shadowDisp<0) shadowDisp *= negAdj;
 	if (shadowBlur<0) shadowBlur *= negAdj;
 	if (innerShadowDrop<0) innerShadowDrop *= negAdj;
 	if (innerShadowDisp<0) innerShadowDisp *= negAdj;
 	if (innerShadowBlur<0) innerShadowBlur *= negAdj;
-	
 	fontFactor = fontSize/100;
 	outlineStroke = floor(fontFactor * outlineStroke);
 	shadowDrop = floor(fontFactor * shadowDrop);
@@ -180,27 +284,50 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	innerShadowDrop = floor(fontFactor * innerShadowDrop);
 	innerShadowDisp = floor(fontFactor * innerShadowDisp);
 	innerShadowBlur = floor(fontFactor * innerShadowBlur);
-	
 	if (fontStyle=="unstyled") fontStyle="";
-			
 	textOutNumber = 0;
-	textInputLinesText = newArray(textChoiceLines);
 	setFont(fontName, fontSize, fontStyle);
 	longestStringWidth = 0;
-	for (i=0; i<textChoiceLines; i++) {
-		if(textInputLines[i]=="-none-") i = i+1;
-		else if (textInputLines[i]!="-blank-") {
-			if (textInputLines[i]=="-user input-") {
-				Dialog.create("Basic Label Options");
-				Dialog.addString("Label Line "+(i+1)+":","", 30);
-				Dialog.show();
-				textInputLines[i] = Dialog.getString();
+	textOutputLines = newArray();
+	if (editAll){
+		Dialog.create("Edit all chosen lines");
+		Dialog.addMessage("Replace text with \"-none-\" or \"-blank-\" to skip or space lines");
+		Dialog.addMessage("Labels: Use \"^\" for superscript numbers, i.e. ^2 = " + fromCharCode(178) + ", um = "+ fromCharCode(181) + "m, degrees = " + fromCharCode(0x00B0) + " etc.");
+		for (i=0,j=0; i<textChoiceLines; i++) {
+			if (textInputLines[i]!="-none-"){
+				if (textInputLines[i]=="-user input-") Dialog.addString("Label Line "+(j+1)+":","", 30);
+				else Dialog.addString("Label Line "+(j+1)+":",textInputLines[i], lengthOf(textInputLines[i]));
+				j++;
 			}
-			textInputLinesText[i] = "" + cleanLabel(textInputLines[i]);
-			textOutNumber = i+1;
-			if (getStringWidth(textInputLinesText[i])>longestStringWidth) longestStringWidth = getStringWidth(textInputLines[i]);
+		}
+		textChoiceLines = j;
+		Dialog.show();
+		for (i=0,j=0; i<textChoiceLines; i++) {
+			newLine = cleanLabel(Dialog.getString());
+			if (newLine!= "-none-"){
+				textOutputLines[j] = cleanLabel(newLine);
+				if (getStringWidth(newLine)>longestStringWidth) longestStringWidth = getStringWidth(newLine);
+				j++;
+			}
 		}
 	}
+	else {
+		for (i=0,j=0; i<textChoiceLines; i++) {
+			if (textInputLines[i]!="-none-"){
+				if (textInputLines[i]=="-user input-") {
+					Dialog.create("Basic Label Options");
+					Dialog.addString("Label Line "+(i+1)+":","", 30);
+					Dialog.show();
+					textOutputLines[j] = cleanLabel(Dialog.getString());
+				}
+				else if (textInputLines[i]=="-blank-") textOutputLines[j] = "";
+				else textOutputLines[j] = "" + cleanLabel(textInputLines[i]);
+				if (getStringWidth(textOutputLines[j])>longestStringWidth) longestStringWidth = getStringWidth(textOutputLines[j]);
+				j++;
+			}
+		}
+	}
+	textOutNumber = j;
 	linesSpace = lineSpacing * (textOutNumber-1) * fontSize;
 		if (textLocChoice == "Top Left") {
 		selEX = selOffsetX;
@@ -250,12 +377,8 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	setFont(fontName,fontSize, fontStyle);
 	setColor(255,255,255);
 	for (i=0; i<textOutNumber; i++) {
-		// if (textInputLines[i]!="None") textOutNumber = textOutNumber + 1;
-		if (textInputLines[i]!="-blank-") {
-			drawString(textInputLinesText[i], textLabelX, textLabelY);
-			textLabelY += lineSpacing * fontSize;
-		}
-		else textLabelY += lineSpacing * fontSize;
+		drawString(textOutputLines[i], textLabelX, textLabelY);
+		textLabelY += lineSpacing * fontSize;
 	}
 	setThreshold(0, 128);
 	setOption("BlackBackground", false);
@@ -292,50 +415,15 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	rename(labeledImageNameWOExt + "+SmartSEM Annotation");
 	setBatchMode("exit & display");
 	showStatus("Fancy SmartSEM annotation macro finished");
+	memFlush(200);
 /* 
 	( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
 */
-	function checkForPlugin(pluginName) {
-		/* v161102 changed to true-false
-			v180831 some cleanup
-			v210429 Expandable array version
-			v220510 Looks for both class and jar if no extension is given */
-		var pluginCheck = false;
-		if (getDirectory("plugins") == "") restoreExit("Failure to find any plugins!");
-		else pluginDir = getDirectory("plugins");
-		pExts = newArray(".jar",".class");
-		pluginNameO = pluginName;
-		for (j=0; j<lengthOf(pExts); j++){
-			pluginName = pluginNameO;
-			if (!endsWith(pluginName,pExts[0]) && !endsWith(pluginName,pExts[1])) pluginName = pluginName + pExts[j];
-			if (File.exists(pluginDir + pluginName)) {
-				pluginCheck = true;
-				showStatus(pluginName + "found in: "  + pluginDir);
-			}
-			else {
-				pluginList = getFileList(pluginDir);
-				subFolderList = newArray;
-				for (i=0,subFolderCount=0; i<lengthOf(pluginList); i++) {
-					if (endsWith(pluginList[i], "/")) {
-						subFolderList[subFolderCount] = pluginList[i];
-						subFolderCount++;
-					}
-				}
-				for (i=0; i<lengthOf(subFolderList); i++) {
-					if (File.exists(pluginDir + subFolderList[i] +  "\\" + pluginName)) {
-						pluginCheck = true;
-						showStatus(pluginName + " found in: " + pluginDir + subFolderList[i]);
-						i = lengthOf(subFolderList);
-					}
-				}
-			}
-		}
-		return pluginCheck;
-	}
 	function cleanLabel(string) {
 		/*  ImageJ macro default file encoding (ANSI or UTF-8) varies with platform so non-ASCII characters may vary: hence the need to always use fromCharCode instead of special characters.
 		v180611 added "degreeC"
-		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably	*/
+		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
+		v220630 added degrees */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
 		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
@@ -352,10 +440,11 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		string= replace(string, "_", " "); /* Replace underlines with space as thin spaces (fromCharCode(0x2009)) not working reliably  */
 		string= replace(string, "px", "pixels"); /* Expand pixel abbreviation */
 		string= replace(string, "degreeC", fromCharCode(0x00B0) + "C"); /* Degree symbol for dialog boxes */
-		string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
-		string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string = replace(string, " " + fromCharCode(0x00B0), fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
+		// string= replace(string, " °", fromCharCode(0x2009) + fromCharCode(0x00B0)); /* Replace normal space before degree symbol with thin space */
 		string= replace(string, "sigma", fromCharCode(0x03C3)); /* sigma for tight spaces */
-		string= replace(string, "±", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "plusminus", fromCharCode(0x00B1)); /* plus or minus */
+		string= replace(string, "degrees", fromCharCode(0x00B0)); /* plus or minus */
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -427,72 +516,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		divider = (100 / abs(shadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
-	function ExtractZeissSEMmetadata() {
-	/* This macro extracts the metadata from the TIFF file header of an Zeiss SEM image.
- it is based on the scale extracting macro here: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt
- This requires the tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
- There is an example image available at http://rsbweb.nih.gov/ij/images/SmartSEMSample.tif
- See also the original Nabble post by Pablo Manuel Jais: http://imagej.1557.x6.nabble.com/Importing-SEM-images-with-scale-td3689900.html This version: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt
- This version v161101 Peter J. Lee
-*/
-		dir = getDirectory("image");
-		if (dir=="") exit ("path not available");
-		name = getInfo("image.filename");
-		if (name=="") exit ("name not available");
-		if (!matches(getInfo("image.filename"),".*[tT][iI][fF].*")) exit("Not a TIFF file \(original Zeiss TIFF file required\)");
-		if (!checkForPlugin("tiff_tags.jar")) exit("Not a TIFF file \(original Zeiss TIFF file required\)");
-		path = dir + name;
-		fullTag = call("TIFF_Tags.getTag", path, "34118");
-		metaTagStart = indexOf(fullTag, "DP_ZOOM");
-		if (metaTagStart<0) metaArray = newArray("false");
-		else {
-			tag = substring(fullTag, metaTagStart);
-			for (i=0; i<10; i++) tag = replace(tag, "  ", " ");
-			tag = replace(tag, "DP_", "|DP_");
-			tag = replace(tag, "AP_", "|AP_");
-			tag = replace(tag, "SV_", "|SV_");
-			metaArray = split(tag, "|");
-			for (i=0; i<lengthOf(metaArray); i++)
-				metaArray[i] = substring(metaArray[i], indexOf(metaArray[i], " ")+1);
-		}
-		return metaArray;
-	}
-	function ExtractZeissSEMParametersFromMetadata(metaArray) {
-		parameterTempArray = newArray(lengthOf(metaArray));
-		for (i=0; i<lengthOf(metaArray); i++) {
-			if (matches(metaArray[i], ".*=.*")) parameterTempArray[i] = substring(metaArray[i], 0, indexOf(metaArray[i], "=")-1);
-			else if (matches(metaArray[i], ".* :.*")) parameterTempArray[i] = substring(metaArray[i], 0, indexOf(metaArray[i], " :"));
-			else if (matches(metaArray[i], ".*error.*")) parameterTempArray[i] = substring(metaArray[i], 0, indexOf(metaArray[i], "error")-1);
-			else parameterTempArray[i] = "parsing_error";
-		}return parameterTempArray;
-	}
-	function ExtractZeissSEMValuesFromMetadata(metaArray) {
-		valueTempArray = newArray(lengthOf(metaArray));
-		for (i=0; i<lengthOf(metaArray); i++) {
-			if (matches(metaArray[i], ".*=.*")) valueTempArray[i] = substring(metaArray[i], indexOf(metaArray[i], "=")+2);
-			else if (matches(metaArray[i], ".* :.*")) valueTempArray[i] = substring(metaArray[i], indexOf(metaArray[i], " :")+2);
-			else if (matches(metaArray[i], ".*error.*")) valueTempArray[i] = substring(metaArray[i], indexOf(metaArray[i], "error"));
-			else valueTempArray[i] = "parsing_error";
-			splits = split(valueTempArray[i]);
-			if (lengthOf(splits)>0) valueTempArray[i] = splits[0];
-			else valueTempArray[i] = "";
-		}return valueTempArray;
-	}
-	function ExtractZeissSEMUnitsFromMetadata(metaArray) {
-		unitsTempArray = newArray(lengthOf(metaArray));
-		for (i=0; i<lengthOf(metaArray); i++) {
-			if (matches(metaArray[i], ".*=.*")) unitsTempArray[i] = substring(metaArray[i], indexOf(metaArray[i], "=")+2);
-			else if(matches(metaArray[i], ".* :.*")) unitsTempArray[i] = substring(metaArray[i], indexOf(metaArray[i], " :")+2);
-			else if (matches(metaArray[i], ".*error.*")) unitsTempArray[i] = substring(metaArray[i], indexOf(metaArray[i], "error"));
-			else unitsTempArray[i] = "parsing_error";
-			splits = split(unitsTempArray[i]);
-			if (lengthOf(splits)<=1) unitsTempArray[i] = "";
-			else if (lengthOf(splits)==2) unitsTempArray[i] = splits[1];
-			else unitsTempArray[i] = splits[1]+ " " + splits[2]; /* Needed for date */
-		}return unitsTempArray;
-	}
 	/*	Color Functions	*/
-	
 	function getColorArrayFromColorName(colorName) {
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
@@ -569,14 +593,11 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		 return hexName;
 	}
 	function pad(n) {
-	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function */
+	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function in some IJ versions */
 	  if (lengthOf(n)==1) n= "0"+n; return n;
 	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
-	
-		
 	/*	End of Color Functions	*/
-	
 	function getFontChoiceList() {
 		/* v180723 first version */
 		systemFonts = getFontList();
@@ -609,11 +630,36 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
-	function restoreResultsFrom(deactivatedResults) {
-		if (isOpen(deactivatedResults)) {
-			selectWindow(deactivatedResults);		
-			IJ.renameResults("Results");
+	function getValueFromImageInfo(infoFile,infoName,bufferLength,endTrim,errorReturn){
+		/* v220629 1st version: pjl */
+		iInfoName = indexOf(infoFile,infoName);
+		if (iInfoName<0) return errorReturn;
+		else{
+			sTL = lengthOf(infoName);
+			outString = substring(infoFile,iInfoName+sTL,iInfoName+sTL+bufferLength);
+			outString = substring(outString,0,indexOf(outString, "\n") - endTrim); /* removes bad degree symbol for instance */
+			while (endsWith(outString," ")) outString = substring(outString,0,lengthOf(outString)-1);
+			while (startsWith(outString," ")) outString = substring(outString,1);
+			return outString;
 		}
+	}
+	function memFlush(waitTime) {
+		run("Reset...", "reset=[Undo Buffer]"); 
+		wait(waitTime);
+		run("Reset...", "reset=[Locked Image]"); 
+		wait(waitTime);
+		call("java.lang.System.gc"); /* force a garbage collection */
+		wait(waitTime);
+	}
+	function restoreExit(message){ /* Make a clean exit from a macro, restoring previous settings */
+		/* v200305 first version using memFlush function
+			v220316 if message is blank this should still work now
+		*/
+		restoreSettings(); /* Restore previous settings before exiting */
+		setBatchMode("exit & display"); /* Probably not necessary if exiting gracefully but otherwise harmless */
+		memFlush(200);
+		if (message!="") exit(message);
+		else exit;
 	}
 	function unCleanLabel(string) {
 	/* v161104 This function replaces special characters with standard characters for file system compatible filenames.
