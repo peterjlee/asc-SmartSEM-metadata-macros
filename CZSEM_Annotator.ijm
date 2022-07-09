@@ -1,7 +1,7 @@
-/* 
+/*
 	This macro adds multiple operating parameters extracted from SmartSEM metadata to a copy of the image.
 	This requires the tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
-	Originally it was based on the scale extracting macro here: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt but as usual things got a little out of hand . . . 
+	Originally it was based on the scale extracting macro here: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt but as usual things got a little out of hand . . .
 	Peter J. Lee Applied Superconductivity Center at National High Magnetic Field Laboratory.
 	Version v170411 removes spaces in image names to fix issue with new image combinations.
 	v180725 Adds system fonts to font list.
@@ -9,13 +9,14 @@
 	+ v200706 Changed imageDepth variable name added macro label.	5/16/2022 12:46 PM latest function updates f6: updated pad function.
 	+ v220629-30 Switched to using Bio-Formats to extract headers as newer CZSEM headers are too long for "TIFF_Tags.getTag", path, "34118". Removed no-longer used functions
 		Unfortunately characters do not import correctly from Bioformats so an additional edit is typically required.
+		f1: updated colors
  */
 macro "Add Multiple Lines of SEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v220701.ijm";
+	macroL = "CZSEM_Annotator_v220701-f1.ijm";
 	/* We will assume you are using an up to date imageJ */
 	setBatchMode(true);
 	if (selectionType>=0) {
-		selEType = selectionType; 
+		selEType = selectionType;
 		selectionExists = 1;
 		getSelectionBounds(selEX, selEY, selEWidth, selEHeight);
 	}
@@ -181,10 +182,10 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	/* Then Dialog . . . */
 	Dialog.create(zeissSEMName + " Basic Label Options: " + macroL);
 		if (selectionExists==1) {
-			textLocChoices = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection", "At Selection"); 
+			textLocChoices = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection", "At Selection");
 			loc = 6;
 		} else {
-			textLocChoices = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection"); 
+			textLocChoices = newArray("Top Left", "Top Right", "Center", "Bottom Left", "Bottom Right", "Center of New Selection");
 			loc = 0;
 		}
 		Dialog.addChoice("Location:", textLocChoices, textLocChoices[loc]);
@@ -195,16 +196,18 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			Dialog.addNumber("Selection Bounds: Height = ", selEHeight);
 		}
 		Dialog.addNumber("Font size & color:", fontSize, 0, 3,"");
-		if (imageDepth==24)
-			colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray", "red", "pink", "green", "blue", "yellow", "orange", "garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "orange_modern", "pink_modern", "purple_modern", "red_N_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern"); 
-		else colorChoice = newArray("white", "black", "light_gray", "gray", "dark_gray");
+		colorChoices = newArray("white", "black", "off-white", "off-black", "light_gray", "gray", "dark_gray");
+		colorChoicesStd = newArray("red", "cyan", "pink", "green", "blue", "magenta", "yellow", "orange");
+		colorChoicesMod = newArray("garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "green_modern_accent", "green_spring_accent", "orange_modern", "pink_modern", "purple_modern", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern");
+		colorChoicesNeon = newArray("jazzberry_jam", "radical_red", "wild_watermelon", "outrageous_orange", "supernova_orange", "atomic_tangerine", "neon_carrot", "sunglow", "laser_lemon", "electric_lime", "screamin'_green", "magic_mint", "blizzard_blue", "dodger_blue", "shocking_pink", "razzle_dazzle_rose", "hot_magenta");
+		if (imageDepth==24) colorChoices = Array.concat(colorChoices,colorChoicesStd,colorChoicesMod,colorChoicesNeon);
 		Dialog.setInsets(-30, 60, 0);
-		Dialog.addChoice("Text color:", colorChoice, colorChoice[0]);
+		Dialog.addChoice("Text color:", colorChoices, colorChoices[0]);
 		fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
 		Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
 		fontNameChoice = getFontChoiceList();
 		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
-		Dialog.addChoice("Outline color:", colorChoice, colorChoice[1]);
+		Dialog.addChoice("Outline color:", colorChoices, colorChoices[1]);
 		Dialog.addNumber("Limit to first",textChoiceLines,0,3,"lines");
 		Dialog.addCheckbox("Edit all entries in next dialog \(correct symbols etc.\)?",true);
 		for (i=0; i<textChoiceLines; i++){
@@ -237,13 +240,13 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			textInputLines[i] = Dialog.getChoice();
 		tweakFormat = Dialog.getChoice();
 /*	*/
-	if (tweakFormat=="Yes") {	
+	if (tweakFormat=="Yes") {
 	Dialog.create("Advanced Formatting Options");
 		Dialog.addNumber("X offset from edge \(for corners only\)", selOffsetX,0,1,"pixels");
 		Dialog.addNumber("Y offset from edge \(for corners only\)", selOffsetY,0,1,"pixels");
 		Dialog.addNumber("Line Spacing", lineSpacing,0,3,"");
 		Dialog.addNumber("Outline stroke:", outlineStroke,0,3,"% of font size");
-		Dialog.addChoice("Outline (background) color:", colorChoice, colorChoice[1]);
+		Dialog.addChoice("Outline (background) color:", colorChoices, colorChoices[1]);
 		Dialog.addNumber("Shadow drop: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size"); /* � symbol: 0x00B1 plus/minus */
 		Dialog.addNumber("Shadow displacement right: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size");
 		Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDrop),0,3,"% of font size");
@@ -340,7 +343,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		selEY = round((imageHeight - linesSpace)/2);
 	} else if (textLocChoice == "Bottom Left") {
 		selEX = selOffsetX;
-		selEY = imageHeight - (selOffsetY + linesSpace); 
+		selEY = imageHeight - (selOffsetY + linesSpace);
 	} else if (textLocChoice == "Bottom Right") {
 		selEX = imageWidth - longestStringWidth - selOffsetX;
 		selEY = imageHeight - (selOffsetY + linesSpace);
@@ -416,7 +419,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	setBatchMode("exit & display");
 	showStatus("Fancy SmartSEM annotation macro finished");
 	memFlush(200);
-/* 
+/*
 	( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
 */
 	function cleanLabel(string) {
@@ -521,7 +524,8 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
-		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference
+		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
+		   REQUIRES restoreExit function.  56 Colors
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -538,6 +542,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "green") cA = newArray(0,255,0); /* #00FF00 AKA Lime green */
 		else if (colorName == "blue") cA = newArray(0,0,255);
+		else if (colorName == "magenta") cA = newArray(255,0,255); /* #FF00FF */
 		else if (colorName == "yellow") cA = newArray(255,255,0);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
 		else if (colorName == "cyan") cA = newArray(0, 255, 255);
@@ -618,7 +623,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		faveFontListCheck = Array.trim(faveFontListCheck, counter);
 		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
 		return fontNameChoice;
-	}	
+	}
 	function getSelectionFromMask(selection_Mask){
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
@@ -644,9 +649,9 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		}
 	}
 	function memFlush(waitTime) {
-		run("Reset...", "reset=[Undo Buffer]"); 
+		run("Reset...", "reset=[Undo Buffer]");
 		wait(waitTime);
-		run("Reset...", "reset=[Locked Image]"); 
+		run("Reset...", "reset=[Locked Image]");
 		wait(waitTime);
 		call("java.lang.System.gc"); /* force a garbage collection */
 		wait(waitTime);
@@ -715,7 +720,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		}
 		for (i=0; i<lengthOf(unwantedSuffixes); i++){
 			sL = lengthOf(preString);
-			if (endsWith(preString,unwantedSuffixes[i])) { 
+			if (endsWith(preString,unwantedSuffixes[i])) {
 				preString = substring(preString,0,sL-lengthOf(unwantedSuffixes[i])); /* cleanup previous suffix */
 				i=-1; /* check one more time */
 			}
