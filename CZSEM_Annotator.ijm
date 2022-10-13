@@ -9,9 +9,11 @@
 	+ v200706 Changed imageDepth variable name added macro label.	5/16/2022 12:46 PM latest function updates f6: updated pad function.
 	+ v220811 Switched to stripping header text as string.
 	+ v220812 Tweaked ZapGremlins and embeds scale if no scale is currently used. F1 updated color functions.
+	+ v220824 In-row label spacing now a user variable. Changed defaults to expansion and added checks for color choices.
+	+ v221013 Options added to save space for scale bar and output labels to log window.
  */
-macro "Add Multiple Lines of SEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v220812-f1.ijm";
+macro "Add Multiple Lines of CZSEM Metadata to Image" {
+	macroL = "CZSEM_Annotator_v221013b.ijm";
 	/* We will assume you are using an up to date imageJ */
 	setBatchMode(true);
 	if (selectionType>=0) {
@@ -22,6 +24,8 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	else selectionExists = false;
 	degCh = fromCharCode(0x00B0);
 	micronS = getInfo("micrometer.abbreviation");
+	sepSpace = "";
+	diagnostics = false;
 	t=getTitle();
 	tNoExt = unCleanLabel(t);
 	iExt = lastIndexOf(tNoExt,".");
@@ -34,9 +38,14 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	orPath = getDir("image") + getInfo("image.filename");
 	if(iSEMName<0){
 		/* If the standard CZ SEM info is missing use BioFormats to retrieve metaData */
+		if (diagnostics) headerStart = getTime();
 		if(File.exists(orPath)) {
 			fullFileString = File.openAsString(orPath);
 			smartSEMInfos = extractTIFFHeaderInfoToArray(fullFileString,"DP_","SAMPLE_ID",200,newArray("SmartSEM header not found"));
+			if (diagnostics){
+				headerExtracted = getTime();
+				IJ.log("Time to extract header: " + (headerExtracted-headerStart)/1000 + " s");
+			}
 			if (smartSEMInfos[0]!= "SmartSEM header not found"){
 				for (i=0;i<smartSEMInfos.length;i++) smartSEMInfos = Array.deleteIndex(smartSEMInfos, i); /* For SmartSEM images ONLY: Remove unnecessary info title lines */
 				smartSEMInfoString = arrayToString(smartSEMInfos,"\n");
@@ -46,6 +55,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			call("java.lang.System.gc");
 		}
 	}
+	headerExtractionComplete = getTime();
 	infoLines = split(getMetadata("Info"), "\n");
 	iSEMName = indexOfArrayThatStartsWith(infoLines,"Sem = ",-1);
 	if (iSEMName>=0){
@@ -137,7 +147,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	fStageParams = newArray("Stage at T: ", "Tilt Angle: ", "Stage at X: ", "Stage at Y: ",  "Stage at Z: ");
 	fImageParams = newArray("Signal A: ","Image Pixel Size: ", "Mag: ","Height: ", "Width: ", "Brightness: ", "Contrast: ","Tilt Corrn.: ");
 	if (indexOfArray(metaTags,"Scan Rot: On",-1)>=0) fImageParams = Array.concat(fImageParams,"Scan Rotation: ");
-	if (indexOfArray(metaTags,"Stage Angle corrn.: On",-1)>=0) fImageParams = Array.concat(fImageParams,"Stage Angle corrn.: ", "Stage Angle: ");
+	// if (indexOfArray(metaTags,"Stage Angle corrn.: On",-1)>=0) fImageParams = Array.concat(fImageParams,"Stage Angle corrn.: ", "Stage Angle: "); /* This is just a joystick movement correction /*
 	if (startsWith(SEMName,"EVO")){
 		fBeamParams = newArray("WD: ", "Aperture Size: ", "Spot Size: ", "I Probe: ","Filament Type: ","Filament Age: ");
 		if (indexOfArray(metaTags,"OptiBeam Is: On",-1)>=0) fBeamParams = Array.concat("OptiBeam Mode: ",fBeamParams);
@@ -165,8 +175,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	imageHeight = getHeight();
 	imageDims = imageHeight + imageWidth;
 	imageDepth = bitDepth();
-	fontSize = round(imageDims/140); /* default font size is small for this variant */
-	if (fontSize < 10) fontSize = 10; /* set minimum default font size as 12 */
+	fontSize = maxOf(9,round(imageDims/140)); /* default font size is small for this variant */
 	lineSpacing = 1;
 	outlineStroke = 8; /* default outline stroke: % of font size */
 	shadowDrop = 12;  /* default outer shadow drop: % of font size */
@@ -186,34 +195,54 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	colorChoicesMod = newArray("garnet", "gold", "aqua_modern", "blue_accent_modern", "blue_dark_modern", "blue_modern", "blue_honolulu", "gray_modern", "green_dark_modern", "green_modern", "green_modern_accent", "green_spring_accent", "orange_modern", "pink_modern", "purple_modern", "red_n_modern", "red_modern", "tan_modern", "violet_modern", "yellow_modern");
 	colorChoicesNeon = newArray("jazzberry_jam", "radical_red", "wild_watermelon", "outrageous_orange", "supernova_orange", "atomic_tangerine", "neon_carrot", "sunglow", "laser_lemon", "electric_lime", "screamin'_green", "magic_mint", "blizzard_blue", "dodger_blue", "shocking_pink", "razzle_dazzle_rose", "hot_magenta");
 	if (imageDepth==24) colorChoices = Array.concat(colorChoices,colorChoicesStd,colorChoicesMod,colorChoicesNeon);
-	loc = 0;
 	textLocChoices = newArray("Column Left", "Column Right", "Center", "Rows Bottom Left", "Rows Bottom Right", "Center of New Selection");
 	if (selectionExists) {
 		textLocChoices = Array.concat(textLocChoices, "At Selection");
-		loc = 6;
+		defLoc = textLocChoices.length-1;
 	}
 	fontStyleChoice = newArray("bold", "bold antialiased", "italic", "italic antialiased", "bold italic", "bold italic antialiased", "unstyled");
 	fontNameChoice = getFontChoiceList();
 	showStatus("Preparing dialog list");
+	if (diagnostics){
+		dialog1Creation = getTime();
+		IJ.log("Time to filter parameters: " + (dialog1Creation-headerExtractionComplete)/1000 + " s");
+	}
+	if (imageDepth==24){
+		iTC = indexOfArray(colorChoices, call("ij.Prefs.get", "asc.czsem.anno.font.color",colorChoices[0]),0);
+		iOC = indexOfArray(colorChoices, call("ij.Prefs.get", "asc.czsem.anno.outline.color",colorChoices[1]),1);
+	}
+	else{
+		iTC = indexOfArray(colorChoices, call("ij.Prefs.get", "asc.czsem.anno.font.gray",colorChoices[0]),0);
+		iOC = indexOfArray(colorChoices, call("ij.Prefs.get", "asc.czsem.anno.outline.gray",colorChoices[1]),1);
+	}
+	iTextLoc = indexOfArray(textLocChoices, call("ij.Prefs.get", "asc.czsem.anno.textLoc", textLocChoices[3]),3);
+	sepSpaceN = parseInt(call("ij.Prefs.get", "asc.czsem.anno.sepSpaceN",4));
 	Dialog.create(zeissSEMName + " Basic Label Options: " + macroL);
 		if (imageDepth==16 || imageDepth==32) Dialog.addCheckbox("Image depth is " + imageDepth + ": Use 8-bit copy for annotation", true);
-		Dialog.addChoice("Location:", textLocChoices, textLocChoices[loc]);
+		Dialog.addChoice("Location:", textLocChoices, textLocChoices[iTextLoc]);
 		if (selectionExists) {
 			Dialog.addNumber("Selection Bounds: X start = ", selEX);
 			Dialog.addNumber("Selection Bounds: Y start = ", selEY);
 			Dialog.addNumber("Selection Bounds: Width = ", selEWidth);
 			Dialog.addNumber("Selection Bounds: Height = ", selEHeight);
 		}
-		else Dialog.addRadioButtonGroup("Location \(for expansions the background color is the selected outline color\):", newArray("On image","Expand left","Expand right","Expand bottom"),1,5,"On image");
-		Dialog.addNumber("Font size & color:", fontSize, 0, 3,"");
-		Dialog.addChoice("Text color:", colorChoices, colorChoices[0]);
-		Dialog.addChoice("Outline color:", colorChoices, colorChoices[1]);
+		else Dialog.addCheckbox("Expand canvas to accommodate label \(uses Outline\/Background color below\)?", true);
+		Dialog.addNumber("Font size:", fontSize, 0, 3,"");
+		Dialog.addChoice("Text color:", colorChoices, colorChoices[iTC]);
+		Dialog.addToSameRow();
+		Dialog.addChoice("Outline\/Background color:", colorChoices, colorChoices[iOC]);
 		Dialog.addChoice("Font style:", fontStyleChoice, fontStyleChoice[1]);
-		// Dialog.addToSameRow();
+		Dialog.addToSameRow();
 		Dialog.addChoice("Font name:", fontNameChoice, fontNameChoice[0]);
-		Dialog.addNumber("Limit to first",f,0,3,"lines");
-		// Dialog.addToSameRow();
-		Dialog.addCheckbox("Edit all entries in next dialog \(correct symbols etc.\)?",true);
+		Dialog.addNumber("Label in-row Spacing",sepSpaceN,0,3,"spaces");
+		Dialog.addToSameRow();
+		Dialog.addNumber("Leave space for scale bar",0,0,3,"% of image width \(bottom\) or height \(left\/right\)");
+		Dialog.addNumber("Limit to first",fLines,0,3,"lines");
+		Dialog.addToSameRow();
+		Dialog.addCheckbox("Tweak text formatting? ", false);
+		Dialog.addCheckbox("Edit all entries in next dialog \(correct symbols etc.\)?",false);
+		Dialog.addToSameRow();
+		Dialog.addCheckbox("Print annotation list to log window?",false);
 		for (i=0,r=1; i<textChoiceLines; i++,r++){
 			showProgress(i,textChoiceLines);
 			showStatus("Creating parameter selection dialog list item " + i);
@@ -224,43 +253,53 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			Dialog.addChoice("Line "+(i+1)+":", textChoices, textChoices[i+3]);
 		}
 		showStatus("Created parameter selection dialog list");
-		Dialog.addChoice("Tweak the Formatting? ", newArray("Yes", "No"), "No");
-		Dialog.setInsets(0, 0, 0);
+		// Dialog.setInsets(100, 20, 20);
 		Dialog.addMessage("Pull down for more options: User-input, blank lines and ALL other parameters");
+		if (diagnostics){
+			dialog1Created = getTime();
+			IJ.log("Time to create dialog for parameter selection: " + (dialog1Created-dialog1Creation)/1000 + " s");
+		}
 /*	*/
 		Dialog.show();
 		if (imageDepth==16 || imageDepth==32) reduceDepth = Dialog.getCheckbox();
 		textLocChoice = Dialog.getChoice();
-		expanded = false;
 		if (selectionExists) {
-			selEX =  Dialog.getNumber();
-			selEY =  Dialog.getNumber();
-			selEWidth =  Dialog.getNumber();
-			selEHeight =  Dialog.getNumber();
+			selEX = Dialog.getNumber();
+			selEY = Dialog.getNumber();
+			selEWidth = Dialog.getNumber();
+			selEHeight = Dialog.getNumber();
+			expanded = false;
 		}
-		else {
-			expansion = Dialog.getRadioButton();
-			if (expansion!="On image") expanded = true;
-		} 
+		else expanded = Dialog.getCheckbox();
 		fontSize =  Dialog.getNumber();
-		selColor = Dialog.getChoice();
+		fontColor = Dialog.getChoice();
 		outlineColor = Dialog.getChoice();
 		fontStyle = Dialog.getChoice();
 		fontName = Dialog.getChoice();
+		sepSpaceN = Dialog.getNumber();
+		scaleBarPC = Dialog.getNumber();
 		textChoiceLines = Dialog.getNumber();
 		textInputLines = newArray(textChoiceLines);
+		tweakFormat = Dialog.getCheckbox();
 		editAll = Dialog.getCheckbox();
+		printOut = Dialog.getCheckbox();
 		for (i=0; i<textChoiceLines; i++)
 			textInputLines[i] = Dialog.getChoice();
-		tweakFormat = Dialog.getChoice();
 /*	*/
-	if (tweakFormat=="Yes") {
+	for (i=0;i<sepSpaceN;i++) sepSpace += " "; 
+	if (outlineColor==fontColor) tweakFormat = true;
+	if (startsWith(textLocChoice,"Center")) expanded = false;
+	if (tweakFormat) {
 	Dialog.create("Advanced Formatting Options");
 		Dialog.addNumber("X offset from edge \(for corners only\)", selOffsetX,0,1,"pixels");
 		Dialog.addNumber("Y offset from edge \(for corners only\)", selOffsetY,0,1,"pixels");
 		Dialog.addNumber("Line Spacing", lineSpacing,0,3,"");
+		if (outlineColor==fontColor){
+			Dialog.addMessage("Outline color and text color should be different",11,"red");
+			Dialog.addChoice("Text color:", colorChoices, colorChoices[0]);
+			Dialog.addChoice("Outline color:", colorChoices, colorChoices[1]);
+		}
 		if (!expanded){
-			Dialog.addChoice("Outline (background) color:", colorChoices, colorChoices[1]);
 			Dialog.addNumber("Outline stroke:", outlineStroke,0,3,"% of font size");
 			Dialog.addNumber("Shadow drop: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size"); /* � symbol: 0x00B1 plus/minus */
 			Dialog.addNumber("Shadow displacement right: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size");
@@ -280,7 +319,10 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		selOffsetX = Dialog.getNumber();
 		selOffsetY = Dialog.getNumber();
 		lineSpacing = Dialog.getNumber();
-		outlineColor = Dialog.getChoice();
+		if (outlineColor==fontColor){		
+			fontColor = Dialog.getChoice();
+			outlineColor = Dialog.getChoice();
+		}
 		if (!expanded){
 			outlineStroke = Dialog.getNumber();
 			shadowDrop = Dialog.getNumber();
@@ -293,6 +335,18 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			innerShadowDarkness = Dialog.getNumber();
 		}
 	}
+	if (imageDepth==24){
+		call("ij.Prefs.set", "asc.czsem.anno.font.color", fontColor);
+		call("ij.Prefs.set", "asc.czsem.anno.outline.color", outlineColor);
+	}
+	else {
+		call("ij.Prefs.set", "asc.czsem.anno.font.gray", fontColor);
+		call("ij.Prefs.set", "asc.czsem.anno.outline.gray", outlineColor);
+	}
+	call("ij.Prefs.set", "asc.czsem.anno.sepSpaceN", sepSpaceN);
+	call("ij.Prefs.set", "asc.czsem.anno.textLoc", textLocChoice);
+	fontColors = getColorArrayFromColorName(fontColor);
+	outlineColors = getColorArrayFromColorName(outlineColor);
 	fontFactor = fontSize/100;
 	if (!expanded){
 		negAdj = 0.5;  /* negative offsets appear exaggerated at full displacement */
@@ -353,6 +407,9 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 			}
 		}
 	}
+	if (printOut){
+		for (i=0; i<textOutputLines.length; i++) IJ.log(textOutputLines[i]);
+	}
 	fontHeight = getValue("font.height");
 	textOutNumber = j;
 	if(startsWith(textLocChoice,"Rows")){
@@ -360,32 +417,32 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		rowText = "";
 		longestStringWidth = 0;
 		for (i=0,j=0; i<textOutNumber; i++) {
-			labelLength = getStringWidth(textOutputLines[i] + "   ");
+			labelLength = getStringWidth(textOutputLines[i] + sepSpace);
 			rowLength = getStringWidth(rowText);
-			if ((rowLength+labelLength+2*selOffsetX) < imageWidth)	rowText += textOutputLines[i] + "   ";
+			if ((rowLength+labelLength+2*selOffsetX) < imageWidth*(1-scaleBarPC/100))	rowText += textOutputLines[i] + sepSpace;
 			else {
 				textRows[j] = rowText;
 				if (rowLength>longestStringWidth) longestStringWidth = rowLength;
-				rowText = textOutputLines[i] + "   ";
+				rowText = textOutputLines[i] + sepSpace;
 				j++;
 			}
 		}
 		nRows = j+1;
 		if(nRows==1) longestStringWidth = rowLength;
-		linesSpace = lineSpacing * nRows * fontHeight;
+		linesSpace = lineSpacing * nRows * fontHeight - (lineSpacing*fontHeight/2);
 	}
-	else linesSpace = lineSpacing * (textOutNumber-1) * fontHeight;
+	else linesSpace = lineSpacing * (textOutNumber-1) * fontHeight + imageHeight*scaleBarPC/100;
 	if (textLocChoice == "Column Left") {
 		selEX = selOffsetX;
-		selEY = selOffsetY;
+		selEY = selOffsetY + imageHeight*scaleBarPC/100;
 	} else if (textLocChoice == "Column Right") {
 		selEX = imageWidth - longestStringWidth - selOffsetX;
-		selEY = selOffsetY;
+		selEY = selOffsetY + imageHeight*scaleBarPC/100;
 	} else if (textLocChoice == "Center") {
 		selEX = round((imageWidth - longestStringWidth)/2);
 		selEY = round((imageHeight - linesSpace)/2);
 	} else if (textLocChoice == "Rows Bottom Left") {
-		selEX = selOffsetX;
+		selEX = selOffsetX + imageWidth*scaleBarPC/100;
 		selEY = imageHeight - (selOffsetY + linesSpace);
 	} else if (textLocChoice == "Rows Bottom Right") {
 		selEX = imageWidth - longestStringWidth - selOffsetX;
@@ -427,16 +484,19 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 	}
 	labeledImage = getTitle();
 	if (expanded){
-		setBackgroundFromColorName(outlineColor);
-		if (expansion=="Expand Bottom"){
+		if (outlineColor!=fontColor){
+			setBackgroundColor(outlineColors[0],outlineColors[1],outlineColors[2]);
+			setColor(fontColors[0],fontColors[1],fontColors[2]);
+		}
+		if (startsWith(textLocChoice,"Rows Bottom")){
 			newImageHeight = imageHeight+linesSpace+selOffsetY;
 			run("Canvas Size...", "width="+imageWidth+" height="+newImageHeight+" position=Top-Left");
 			textLabelY = imageHeight+selOffsetY+fontHeight;
 		}
 		else {
 			newImageWidth = imageWidth+longestStringWidth+2*selOffsetX;
-			if (expansion=="Expand left") run("Canvas Size...", "width="+newImageWidth+" height="+imageHeight+" position=Top-Right");
-			else if (expansion=="Expand right"){
+			if (startsWith(textLocChoice,"Column Left")) run("Canvas Size...", "width="+newImageWidth+" height="+imageHeight+" position=Top-Right");
+			else if (startsWith(textLocChoice,"Column Right")){
 				run("Canvas Size...", "width="+newImageWidth+" height="+imageHeight+" position=Top-Left");
 				textLabelX = imageWidth + selOffsetX;
 			}
@@ -484,7 +544,7 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		run("Clear");
 		run("Select None");
 		getSelectionFromMask("label_mask");
-		setBackgroundFromColorName(selColor);
+		setBackgroundFromColorName(fontColor);
 		run("Clear");
 		run("Select None");
 		if (isOpen("inner_shadow")) imageCalculator("Subtract", labeledImage,"inner_shadow");
@@ -618,9 +678,9 @@ macro "Add Multiple Lines of SEM Metadata to Image" {
 		iStartTag = indexOf(tag,beginTag);
 		if (iStartTag>=0){
 			tag = substring(tag,iStartTag);
-			// tag = replace(tag,fromCharCode(9),"   ");
+			// tag = replace(tag,fromCharCode(9),sepSpace);
 			// tag = replace(tag,fromCharCode(10),"\n");
-			tag = zapGremlins(tag,"\n","   ",true);
+			tag = zapGremlins(tag,"\n",sepSpace,true);
 			tagEndString = substring(tag,lengthOf(tag)-endBuffer,lengthOf(tag));
 			iEndOfLine = lengthOf(tag)-endBuffer + indexOf(tagEndString,"\n");
 			tag = substring(tag,0,iEndOfLine);
