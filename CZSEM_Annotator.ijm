@@ -11,10 +11,12 @@
 	+ v220812 Tweaked ZapGremlins and embeds scale if no scale is currently used. F1 updated color functions.
 	+ v220824 In-row label spacing now a user variable. Changed defaults to expansion and added checks for color choices.
 	+ v221013 Options added to save space for scale bar and output labels to log window.
+	+ v221207 Changed to using "NUL" character to find end of header by editing ZapGremlins and extractTIFFHeaderInfoToArray functions. f1 (053023) updated multiple functions
  */
 macro "Add Multiple Lines of CZSEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v221013b.ijm";
+	macroL = "CZSEM_Annotator_v221207-f1.ijm";
 	/* We will assume you are using an up to date imageJ */
+	saveSettings; /* for restoreExit */
 	setBatchMode(true);
 	if (selectionType>=0) {
 		selEType = selectionType;
@@ -41,7 +43,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		if (diagnostics) headerStart = getTime();
 		if(File.exists(orPath)) {
 			fullFileString = File.openAsString(orPath);
-			smartSEMInfos = extractTIFFHeaderInfoToArray(fullFileString,"DP_","SAMPLE_ID",200,newArray("SmartSEM header not found"));
+			smartSEMInfos = extractTIFFHeaderInfoToArray(fullFileString,"DP_","SAMPLE_ID",300,"\n",sepSpace,"End of Header",newArray("SmartSEM header not found")); /* (tag,beginTag,endTag,endBuffer,lfRep,tabRep,nulRep,default) */
 			if (diagnostics){
 				headerExtracted = getTime();
 				IJ.log("Time to extract header: " + (headerExtracted-headerStart)/1000 + " s");
@@ -143,7 +145,8 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		}
 	}
 	lMetaTags = j;
-	fParams1 = newArray("SEM: ","Date: ", "Time: ", "Sample ID: ", "User Name: ", "File Name: ","Photo No. : ","EHT: ");
+	fSessionInfos = newArray("SEM: ","Date: ", "Time: ", "User Name: ", "Photo No.: ", "File Name: ", "Images: "); /* NOTE: there should be no space before ':' and a space after */
+	fParams1 = newArray("Sample ID: ", "EHT: ");
 	fStageParams = newArray("Stage at T: ", "Tilt Angle: ", "Stage at X: ", "Stage at Y: ",  "Stage at Z: ");
 	fImageParams = newArray("Signal A: ","Image Pixel Size: ", "Mag: ","Height: ", "Width: ", "Brightness: ", "Contrast: ","Tilt Corrn.: ");
 	if (indexOfArray(metaTags,"Scan Rot: On",-1)>=0) fImageParams = Array.concat(fImageParams,"Scan Rotation: ");
@@ -154,7 +157,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 	}
 	else fBeamParams = newArray("Fil I: ", "WD: ", "Aperture Size: ");
 	fScanParams = newArray("Noise Reduction: ", "Scan Speed: ","Cycle Time: ","Line Time: ", "N: ", "Line Avg.Count: ");
-	favoriteParameters = Array.concat(fParams1,fBeamParams,fImageParams,fScanParams,fStageParams);	
+	favoriteParameters = Array.concat(fParams1,fBeamParams,fImageParams,fScanParams,fStageParams,fSessionInfos);	
 	lFPs = lengthOf(favoriteParameters);
 	favoriteAnnos = newArray();
 	for(i=0,f=0;i<lFPs;i++){
@@ -287,52 +290,52 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 			textInputLines[i] = Dialog.getChoice();
 /*	*/
 	for (i=0;i<sepSpaceN;i++) sepSpace += " "; 
-	if (outlineColor==fontColor) tweakFormat = true;
+	if (outlineColor==fontColor) tweakFormat = true; /* Forces a second look at formatting */
 	if (startsWith(textLocChoice,"Center")) expanded = false;
 	if (tweakFormat) {
-	Dialog.create("Advanced Formatting Options");
-		Dialog.addNumber("X offset from edge \(for corners only\)", selOffsetX,0,1,"pixels");
-		Dialog.addNumber("Y offset from edge \(for corners only\)", selOffsetY,0,1,"pixels");
-		Dialog.addNumber("Line Spacing", lineSpacing,0,3,"");
-		if (outlineColor==fontColor){
-			Dialog.addMessage("Outline color and text color should be different",11,"red");
-			Dialog.addChoice("Text color:", colorChoices, colorChoices[0]);
-			Dialog.addChoice("Outline color:", colorChoices, colorChoices[1]);
-		}
-		if (!expanded){
-			Dialog.addNumber("Outline stroke:", outlineStroke,0,3,"% of font size");
-			Dialog.addNumber("Shadow drop: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size"); /* � symbol: 0x00B1 plus/minus */
-			Dialog.addNumber("Shadow displacement right: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size");
-			Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDrop),0,3,"% of font size");
-			Dialog.addNumber("Shadow Darkness:", 75,0,3,"%\(darkest = 100%\)");
-			// Dialog.addMessage("The following \"Inner Shadow\" options do not change the Overlay Labels");
-			Dialog.addNumber("Inner shadow drop: " + fromCharCode(0x00B1), dIShO,0,3,"% of font size");
-			Dialog.addNumber("Inner displacement right: " + fromCharCode(0x00B1), dIShO,0,3,"% of font size");
-			Dialog.addNumber("Inner shadow mean blur:",floor(dIShO/2),1,3,"% of font size");
-			Dialog.addNumber("Inner Shadow Darkness:", 20,0,3,"% \(darkest = 100%\)");
-		}
-		else {
-			Dialog.addMessage("No shadows or outlines are used if the labels are not located on the image");
-			Dialog.addChoice("Expanded region background color:", colorChoices, colorChoices[1]);
-		}
-	Dialog.show();
-		selOffsetX = Dialog.getNumber();
-		selOffsetY = Dialog.getNumber();
-		lineSpacing = Dialog.getNumber();
-		if (outlineColor==fontColor){		
-			fontColor = Dialog.getChoice();
-			outlineColor = Dialog.getChoice();
-		}
-		if (!expanded){
-			outlineStroke = Dialog.getNumber();
-			shadowDrop = Dialog.getNumber();
-			shadowDisp = Dialog.getNumber();
-			shadowBlur = Dialog.getNumber();
-			shadowDarkness = Dialog.getNumber();
-			innerShadowDrop = Dialog.getNumber();
-			innerShadowDisp = Dialog.getNumber();
-			innerShadowBlur = Dialog.getNumber();
-			innerShadowDarkness = Dialog.getNumber();
+		Dialog.create("Advanced Formatting Options");
+			Dialog.addNumber("X offset from edge \(for corners only\)", selOffsetX,0,1,"pixels");
+			Dialog.addNumber("Y offset from edge \(for corners only\)", selOffsetY,0,1,"pixels");
+			Dialog.addNumber("Line Spacing", lineSpacing,0,3,"");
+			if (outlineColor==fontColor){
+				Dialog.addMessage("Outline color and text color should be different",11,"red");
+				Dialog.addChoice("Text color:", colorChoices, colorChoices[0]);
+				Dialog.addChoice("Outline color:", colorChoices, colorChoices[1]);
+			}
+			if (!expanded){
+				Dialog.addNumber("Outline stroke:", outlineStroke,0,3,"% of font size");
+				Dialog.addNumber("Shadow drop: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size"); /* � symbol: 0x00B1 plus/minus */
+				Dialog.addNumber("Shadow displacement right: " + fromCharCode(0x00B1), shadowDrop,0,3,"% of font size");
+				Dialog.addNumber("Shadow Gaussian blur:", floor(0.75 * shadowDrop),0,3,"% of font size");
+				Dialog.addNumber("Shadow Darkness:", 75,0,3,"%\(darkest = 100%\)");
+				// Dialog.addMessage("The following \"Inner Shadow\" options do not change the Overlay Labels");
+				Dialog.addNumber("Inner shadow drop: " + fromCharCode(0x00B1), dIShO,0,3,"% of font size");
+				Dialog.addNumber("Inner displacement right: " + fromCharCode(0x00B1), dIShO,0,3,"% of font size");
+				Dialog.addNumber("Inner shadow mean blur:",floor(dIShO/2),1,3,"% of font size");
+				Dialog.addNumber("Inner Shadow Darkness:", 20,0,3,"% \(darkest = 100%\)");
+			}
+			else {
+				Dialog.addMessage("No shadows or outlines are used if the labels are not located on the image");
+				Dialog.addChoice("Expanded region background color:", colorChoices, colorChoices[1]);
+			}
+		Dialog.show();
+			selOffsetX = Dialog.getNumber();
+			selOffsetY = Dialog.getNumber();
+			lineSpacing = Dialog.getNumber();
+			if (outlineColor==fontColor){		
+				fontColor = Dialog.getChoice();
+				outlineColor = Dialog.getChoice();
+			}
+			if (!expanded){
+				outlineStroke = Dialog.getNumber();
+				shadowDrop = Dialog.getNumber();
+				shadowDisp = Dialog.getNumber();
+				shadowBlur = Dialog.getNumber();
+				shadowDarkness = Dialog.getNumber();
+				innerShadowDrop = Dialog.getNumber();
+				innerShadowDisp = Dialog.getNumber();
+				innerShadowBlur = Dialog.getNumber();
+				innerShadowDarkness = Dialog.getNumber();
 		}
 	}
 	if (imageDepth==24){
@@ -556,6 +559,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 	setBatchMode("exit & display");
 	showStatus("Fancy SmartSEM annotation macro finished");
 	memFlush(200);
+}
 /*
 	( 8(|)	( 8(|)	Functions	@@@@@:-)	@@@@@:-)
 */
@@ -666,10 +670,11 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		divider = (100 / abs(shadowDarkness));
 		run("Divide...", "value=[divider]");
 	}
-	function extractTIFFHeaderInfoToArray(tag,beginTag,endTag,endBuffer,default){
+	function extractTIFFHeaderInfoToArray(tag,beginTag,endTag,endBuffer,lfRep,tabRep,nulRep,default){
 	/* v220801 1st version
 	  v220803 REQUIRES zapGremlins function
-	  v220805 Changed to works from previously imported string so that string can be reused.
+	  v220805 Changed to work from previously imported string so that string can be reused.
+	  v221207 Looks for NUL character to define end of header (requires v221207 or later version of zapGremins) and adds separation space as input parameter
 		*/
 	iEndTag = lastIndexOf(tag,endTag);
 	if (iEndTag>=0){
@@ -678,25 +683,26 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		iStartTag = indexOf(tag,beginTag);
 		if (iStartTag>=0){
 			tag = substring(tag,iStartTag);
-			// tag = replace(tag,fromCharCode(9),sepSpace);
-			// tag = replace(tag,fromCharCode(10),"\n");
-			tag = zapGremlins(tag,"\n",sepSpace,true);
-			tagEndString = substring(tag,lengthOf(tag)-endBuffer,lengthOf(tag));
-			iEndOfLine = lengthOf(tag)-endBuffer + indexOf(tagEndString,"\n");
+			tag = zapGremlins(tag,lfRep,tabRep,nulRep,true);
+			iEndOfLine = indexOf(tag,nulRep);
+			if(iEndOfLine<1){
+				tagEndString = substring(tag,lengthOf(tag)-endBuffer,lengthOf(tag));
+				iEndOfLine = lengthOf(tag)-endBuffer + indexOf(tagEndString,"\n");
+			}
 			tag = substring(tag,0,iEndOfLine);
 			headerArray = split(tag,"\n");
 			return headerArray;
 		}
 	}
 	else return default;
-  }
-	/*	Color Functions	*/
+	}
+	/*	Modified BAR Color Functions	*/
 	function getColorArrayFromColorName(colorName) {
 		/* v180828 added Fluorescent Colors
 		   v181017-8 added off-white and off-black for use in gif transparency and also added safe exit if no color match found
 		   v191211 added Cyan
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
-		   REQUIRES restoreExit function.  57 Colors
+		   REQUIRES restoreExit function.  57 Colors v230130 Added more descriptions and modified order
 		*/
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
@@ -718,13 +724,13 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		else if (colorName == "pink") cA = newArray(255, 192, 203);
 		else if (colorName == "violet") cA = newArray(127,0,255);
 		else if (colorName == "orange") cA = newArray(255, 165, 0);
-		else if (colorName == "garnet") cA = newArray(120,47,64);
-		else if (colorName == "gold") cA = newArray(206,184,136);
+		else if (colorName == "garnet") cA = newArray(120,47,64); /* #782F40 */
+		else if (colorName == "gold") cA = newArray(206,184,136); /* #CEB888 */
 		else if (colorName == "aqua_modern") cA = newArray(75,172,198); /* #4bacc6 AKA "Viking" aqua */
 		else if (colorName == "blue_accent_modern") cA = newArray(79,129,189); /* #4f81bd */
 		else if (colorName == "blue_dark_modern") cA = newArray(31,73,125); /* #1F497D */
-		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
 		else if (colorName == "blue_honolulu") cA = newArray(0,118,182); /* Honolulu Blue #30076B6 */
+		else if (colorName == "blue_modern") cA = newArray(58,93,174); /* #3a5dae */
 		else if (colorName == "gray_modern") cA = newArray(83,86,90); /* bright gray #53565A */
 		else if (colorName == "green_dark_modern") cA = newArray(121,133,65); /* Wasabi #798541 */
 		else if (colorName == "green_modern") cA = newArray(155,187,89); /* #9bbb59 AKA "Chelsea Cucumber" */
@@ -742,20 +748,20 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		/* Fluorescent Colors https://www.w3schools.com/colors/colors_crayola.asp */
 		else if (colorName == "radical_red") cA = newArray(255,53,94);			/* #FF355E */
 		else if (colorName == "wild_watermelon") cA = newArray(253,91,120);		/* #FD5B78 */
+		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
+		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210); 	/* #EE34D2 */
+		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
 		else if (colorName == "outrageous_orange") cA = newArray(255,96,55);	/* #FF6037 */
 		else if (colorName == "supernova_orange") cA = newArray(255,191,63);	/* FFBF3F Supernova Neon Orange*/
-		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 */
-		else if (colorName == "neon_carrot") cA = newArray(255,153,51);			/* #FF9933 */
 		else if (colorName == "sunglow") cA = newArray(255,204,51); 			/* #FFCC33 */
+		else if (colorName == "neon_carrot") cA = newArray(255,153,51);			/* #FF9933 */
+		else if (colorName == "atomic_tangerine") cA = newArray(255,153,102);	/* #FF9966 */
 		else if (colorName == "laser_lemon") cA = newArray(255,255,102); 		/* #FFFF66 "Unmellow Yellow" */
 		else if (colorName == "electric_lime") cA = newArray(204,255,0); 		/* #CCFF00 */
 		else if (colorName == "screamin'_green") cA = newArray(102,255,102); 	/* #66FF66 */
 		else if (colorName == "magic_mint") cA = newArray(170,240,209); 		/* #AAF0D1 */
 		else if (colorName == "blizzard_blue") cA = newArray(80,191,230); 		/* #50BFE6 Malibu */
 		else if (colorName == "dodger_blue") cA = newArray(9,159,255);			/* #099FFF Dodger Neon Blue */
-		else if (colorName == "shocking_pink") cA = newArray(255,110,255);		/* #FF6EFF Ultra Pink */
-		else if (colorName == "razzle_dazzle_rose") cA = newArray(238,52,210); 	/* #EE34D2 */
-		else if (colorName == "hot_magenta") cA = newArray(255,0,204);			/* #FF00CC AKA Purple Pizzazz */
 		else restoreExit("No color match to " + colorName);
 		return cA;
 	}
@@ -774,21 +780,20 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 	  if (lengthOf(n)==1) n= "0"+n; return n;
 	  if (lengthOf(""+n)==1) n= "0"+n; return n;
 	}
-	/*	End of Color Functions	*/
-	function getFontChoiceList() {
-		/* v180723 first version */
+	/*	End of BAR Color Functions	*/
+  	function getFontChoiceList() {
+		/*	v180723 first version, v180828 Changed order of favorites, v190108 Longer list of favorites, v230209 Minor optimization	*/
 		systemFonts = getFontList();
 		IJFonts = newArray("SansSerif", "Serif", "Monospaced");
 		fontNameChoice = Array.concat(IJFonts,systemFonts);
-		faveFontList = newArray("Your favorite fonts here", "SansSerif", "Arial Black", "Open Sans ExtraBold", "Calibri", "Roboto", "Roboto Bk", "Tahoma", "Times New Roman", "Helvetica");
+		faveFontList = newArray("Your favorite fonts here", "Open Sans ExtraBold", "Fira Sans ExtraBold", "Noto Sans Black", "Arial Black", "Montserrat Black", "Lato Black", "Roboto Black", "Merriweather Black", "Alegreya Black", "Tahoma Bold", "Calibri Bold", "Helvetica", "SansSerif", "Calibri", "Roboto", "Tahoma", "Times New Roman Bold", "Times Bold", "Serif");
 		faveFontListCheck = newArray(faveFontList.length);
-		counter = 0;
-		for (i=0; i<faveFontList.length; i++) {
+		for (i=0,counter=0; i<faveFontList.length; i++) {
 			for (j=0; j<fontNameChoice.length; j++) {
 				if (faveFontList[i] == fontNameChoice[j]) {
 					faveFontListCheck[counter] = faveFontList[i];
-					counter +=1;
 					j = fontNameChoice.length;
+					counter++;
 				}
 			}
 		}
@@ -796,14 +801,17 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		fontNameChoice = Array.concat(faveFontListCheck,fontNameChoice);
 		return fontNameChoice;
 	}
-	function getSelectionFromMask(selection_Mask){
+	function getSelectionFromMask(sel_M){
+		/* v220920 only inverts if full image selection */
 		batchMode = is("Batch Mode"); /* Store batch status mode before toggling */
 		if (!batchMode) setBatchMode(true); /* Toggle batch mode on if previously off */
-		tempTitle = getTitle();
-		selectWindow(selection_Mask);
+		tempID = getImageID();
+		selectWindow(sel_M);
 		run("Create Selection"); /* Selection inverted perhaps because the mask has an inverted LUT? */
-		run("Make Inverse");
-		selectWindow(tempTitle);
+		getSelectionBounds(gSelX,gSelY,gWidth,gHeight);
+		if(gSelX==0 && gSelY==0 && gWidth==Image.width && gHeight==Image.height)	run("Make Inverse");
+		run("Select None");
+		selectImage(tempID);
 		run("Restore Selection");
 		if (!batchMode) setBatchMode(false); /* Return to original batch mode setting */
 	}
@@ -949,12 +957,14 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		/* End of suffix cleanup */
 		return string;
 	}
-	function zapGremlins(inputString,lfRep,tabRep,allElse){
+	function zapGremlins(inputString,lfRep,tabRep,nulRep,allElse){
 	/* v220803 Just https://wsr.imagej.net//macros/ZapGremlins.txt
 	 	Basic Latin decimal character numbers are listed here: https://en.wikipedia.org/wiki/List_of_Unicode_characters#Basic_Latin
-		v220812: chars 181 and 63 is mu and 176 is the degree symbol which seem too valuable to risk loosing: this version allows more latin extended symbols, adds allElse option for light pruning */
+		v220812: chars 181 and 63 is mu and 176 is the degree symbol which seem too valuable to risk loosing: this version allows more latin extended symbols, adds allElse option for light pruning
+		v221207: Adds NUL character replacement
+		 */
 		requires("1.39f");
-		LF=10; TAB=9; /* Carriage return = 13 */
+		LF=10; TAB=9; NUL=0; /* Carriage return = 13 */
 		String.resetBuffer;
 		n = lengthOf(inputString);
 		for (i=0; i<n; i++) {
@@ -963,6 +973,8 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 				String.append(lfRep);
 			else if (c==TAB)
 				String.append(tabRep);
+			else if (c==NUL)
+				String.append(nulRep);
 			else if (c==63)
 				String.append(getInfo("micrometer.abbreviation"));
 			else if (c==197)
@@ -975,4 +987,3 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		return String.buffer;
 		String.resetBuffer;
 	}
-}
