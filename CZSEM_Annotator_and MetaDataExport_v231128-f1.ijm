@@ -14,9 +14,10 @@
 	+ v221207 Changed to using "NUL" character to find end of header by editing ZapGremlins and extractTIFFHeaderInfoToArray functions. f1 (053023) updated multiple functions
 	+ v230803: Replaced getDir for 1.54g10. F1: Updated indexOf functions. f2: getColorArrayFromColorName_v230908.
 	+ v231020: Export filename option added and timestamp.
+	+ v231128: Removed "!" from showStatus for stability.  F1: Replaced function: pad.
  */
 macro "Add Multiple Lines of CZSEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v231020.ijm";
+	macroL = "CZSEM_Annotator_v231128-f1.ijm";
 	/* We will assume you are using an up to date imageJ */
 	saveSettings; /* for restoreExit */
 	setBatchMode(true);
@@ -255,14 +256,14 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		Dialog.addCheckboxGroup(2, 3, extraOptions, extraOptionsChecks);
 		for (i=0, r=1; i<textChoiceLines; i++, r++){
 			showProgress(i, textChoiceLines);
-			showStatus("!Creating parameter selection dialog list item " + i, "yellow"); /* standard colors only */
+			showStatus("Creating parameter selection dialog list item " + i, "yellow"); /* standard colors only */
 			if (r>1){
 				r=0;
 				Dialog.addToSameRow();
 			}
 			Dialog.addChoice("Line "+(i+1)+":", textChoices, textChoices[i+3]);
 		}
-		showStatus("!Created parameter selection dialog list", "green"); /* standard colors only */
+		showStatus("Created parameter selection dialog list", "green"); /* standard colors only */
 		// Dialog.setInsets(100, 20, 20);
 		Dialog.addMessage("Pull down for more options: User-input, blank lines and ALL other parameters", infoFontSize, instructionColor);
 		Dialog.addString("Export file prefix", tNoExt, 20);
@@ -805,16 +806,12 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
 	}
 	function getHexColorFromColorName(colorNameString) {
+		/* v231207: Uses IJ String.pad instead of function: pad */
 		colorArray = getColorArrayFromColorName(colorNameString);
 		 r = toHex(colorArray[0]); g = toHex(colorArray[1]); b = toHex(colorArray[2]);
-		 hexName= "#" + ""+pad(r) + ""+pad(g) + ""+pad(b);
+		 hexName= "#" + "" + String.pad(r, 2) + "" + String.pad(g, 2) + "" + String.pad(b, 2);
 		 return hexName;
-	}
-	function pad(n) {
-	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function in some IJ versions */
-	  if (lengthOf(n)==1) n= "0"+n; return n;
-	  if (lengthOf(""+n)==1) n= "0"+n; return n;
-	}
+	}	
 	/*	End of BAR Color Functions	*/
   	function getDateTimeCode() {
 		/* v211014 based on getDateCode v170823 */
