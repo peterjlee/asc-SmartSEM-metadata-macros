@@ -14,9 +14,11 @@
 	+ v221207 Changed to using "NUL" character to find end of header by editing ZapGremlins and extractTIFFHeaderInfoToArray functions. f1 (053023) updated multiple functions
 	+ v230803: Replaced getDir for 1.54g10. F1: Updated indexOf functions. f2: getColorArrayFromColorName_v230908.
 	+ v231020: Export filename option added and timestamp.
+	+ v231128: Removed "!" from showStatus for stability.  F1: Replaced function: pad.
+	+ v240118: Renames image. Updated cleanLabel function to remove odd EVO characters. f1: Updated getColorFromColorName function (012324)
  */
 macro "Add Multiple Lines of CZSEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v231020.ijm";
+	macroL = "CZSEM_Annotator_v240118-f1.ijm";
 	/* We will assume you are using an up to date imageJ */
 	saveSettings; /* for restoreExit */
 	setBatchMode(true);
@@ -137,7 +139,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 					metaValues[j] = value;
 					metaParameters[j] = parameter;
 					// metaTags[j] = infoLines[i];
-					metaTags[j] = parameter + ": " + value;
+					metaTags[j] = parameter + ": " + cleanLabel(value);
 					if (startsWith(parameter, "SEM: ")) zeissSEMName = value;
 					if (startsWith(parameter, "Version = ")){
 						smartSEMVersion = "" + value;
@@ -253,16 +255,16 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		extraOptionsChecks = newArray(false, false, true, false, false, false);
 		Dialog.setInsets(10, 20, 5)
 		Dialog.addCheckboxGroup(2, 3, extraOptions, extraOptionsChecks);
+		showStatus("!Creating parameter selection dialog list items", "flash yellow"); /* standard colors only - Do not flash color updates as this will slow things down */
 		for (i=0, r=1; i<textChoiceLines; i++, r++){
 			showProgress(i, textChoiceLines);
-			showStatus("!Creating parameter selection dialog list item " + i, "yellow"); /* standard colors only */
 			if (r>1){
 				r=0;
 				Dialog.addToSameRow();
 			}
 			Dialog.addChoice("Line "+(i+1)+":", textChoices, textChoices[i+3]);
 		}
-		showStatus("!Created parameter selection dialog list", "green"); /* standard colors only */
+		showStatus("Created parameter selection dialog list", "green"); /* standard colors only */
 		// Dialog.setInsets(100, 20, 20);
 		Dialog.addMessage("Pull down for more options: User-input, blank lines and ALL other parameters", infoFontSize, instructionColor);
 		Dialog.addString("Export file prefix", tNoExt, 20);
@@ -584,8 +586,9 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 			selectWindow(labeledImage);
 		}
 	}
+	rename(tNoExt + "+Anno");
 	setBatchMode("exit & display");
-	showStatus("Fancy SmartSEM annotation macro finished");
+	showStatus("Fancy SmartSEM annotation macro finished", "flash image green");
 	memFlush(200);
 }
 /*
@@ -607,15 +610,16 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		v180611 added "degreeC"
 		v200604	fromCharCode(0x207B) removed as superscript hyphen not working reliably
 		v220630 added degrees v220812 Changed Ångström unit code
-		v231005 Weird Excel characters added, micron unit correction */
+		v231005 Weird Excel characters added, micron unit correction
+		v240118 Weird EVO characters fixed */
 		string= replace(string, "\\^2", fromCharCode(178)); /* superscript 2 */
 		string= replace(string, "\\^3", fromCharCode(179)); /* superscript 3 UTF-16 (decimal) */
-		string= replace(string, "\\^-"+fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
-		string= replace(string, "\\^-"+fromCharCode(178), "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-" + fromCharCode(185), "-" + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-" + fromCharCode(178), "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
-		string= replace(string, "\\^-1", "-" + fromCharCode(185)); /* superscript -1 */
-		string= replace(string, "\\^-2", "-" + fromCharCode(178)); /* superscript -2 */
+		string= replace(string, "\\^-1", "-"  + fromCharCode(185)); /* superscript -1 */
+		string= replace(string, "\\^-2", "-"  + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "\\^-^1", "-" + fromCharCode(185)); /* superscript -1 */
 		string= replace(string, "\\^-^2", "-" + fromCharCode(178)); /* superscript -2 */
 		string= replace(string, "(?<![A-Za-z0-9])u(?=m)", fromCharCode(181)); /* micron units */
@@ -630,6 +634,12 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		string= replace(string, "plusminus", fromCharCode(0x00B1)); /* plus or minus */
 		string= replace(string, "degrees", fromCharCode(0x00B0)); /* plus or minus */
 		if (indexOf(string,"mý")>1) string = substring(string, 0, indexOf(string,"mý")-1) + getInfo("micrometer.abbreviation") + fromCharCode(178);
+		/* Fixes for weird EVO character issue: */
+		oddEVOUs = newArray(fromCharCode(181)+"m", getInfo("micrometer.abbreviation"), fromCharCode(0x212B), fromCharCode(0x00B0));
+		for (i=0; i<oddEVOUs.length; i++)
+			if ((lastIndexOf(string, " ") + 2)==lastIndexOf(string,oddEVOUs[i])) string = substring(string, 0, lastIndexOf(string, " ") + 1) + substring(string, lastIndexOf(string, " ") + 2, string.length);
+		/* End of EVO specific fix */
+		string = string.replace("µ", fromCharCode(181));
 		return string;
 	}
 	function closeImageByTitle(windowTitle) {  /* Cannot be used with tables */
@@ -735,17 +745,13 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		   v211022 all names lower-case, all spaces to underscores v220225 Added more hash value comments as a reference v220706 restores missing magenta
 		   v230130 Added more descriptions and modified order.
 		   v230908: Returns "white" array if not match is found and logs issues without exiting.
-		     57 Colors 
+		   v240123: Removed duplicate entries: Now 53 unique colors 
 		*/
-		functionL = "getColorArrayFromColorName_v230911";
+		functionL = "getColorArrayFromColorName_v240123";
 		cA = newArray(255,255,255); /* defaults to white */
 		if (colorName == "white") cA = newArray(255,255,255);
 		else if (colorName == "black") cA = newArray(0,0,0);
 		else if (colorName == "off-white") cA = newArray(245,245,245);
-		else if (colorName == "off-black") cA = newArray(10,10,10);
-		else if (colorName == "light_gray") cA = newArray(200,200,200);
-		else if (colorName == "gray") cA = newArray(127,127,127);
-		else if (colorName == "dark_gray") cA = newArray(51,51,51);
 		else if (colorName == "off-black") cA = newArray(10,10,10);
 		else if (colorName == "light_gray") cA = newArray(200,200,200);
 		else if (colorName == "gray") cA = newArray(127,127,127);
@@ -805,16 +811,12 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		setBackgroundColor(colorArray[0], colorArray[1], colorArray[2]);
 	}
 	function getHexColorFromColorName(colorNameString) {
+		/* v231207: Uses IJ String.pad instead of function: pad */
 		colorArray = getColorArrayFromColorName(colorNameString);
 		 r = toHex(colorArray[0]); g = toHex(colorArray[1]); b = toHex(colorArray[2]);
-		 hexName= "#" + ""+pad(r) + ""+pad(g) + ""+pad(b);
+		 hexName= "#" + "" + String.pad(r, 2) + "" + String.pad(g, 2) + "" + String.pad(b, 2);
 		 return hexName;
-	}
-	function pad(n) {
-	  /* This version by Tiago Ferreira 6/6/2022 eliminates the toString macro function in some IJ versions */
-	  if (lengthOf(n)==1) n= "0"+n; return n;
-	  if (lengthOf(""+n)==1) n= "0"+n; return n;
-	}
+	}	
 	/*	End of BAR Color Functions	*/
   	function getDateTimeCode() {
 		/* v211014 based on getDateCode v170823 */
@@ -1008,6 +1010,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		string = string.replace(fromCharCode(0x2009), "_"); /* Replace thin spaces  */
 		string = string.replace("%", "pc"); /* % causes issues with html listing */
 		string = string.replace(" ", "_"); /* Replace spaces - these can be a problem with image combination */
+		string = string.replace("µ", "um");
 		/* Remove duplicate strings */
 		unwantedDupes = newArray("8bit","8-bit","lzw");
 		for (i=0; i<lengthOf(unwantedDupes); i++){
@@ -1072,7 +1075,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 			else if (c==NUL)
 				String.append(nulRep);
 			else if (c==63)
-				String.append(getInfo("micrometer.abbreviation"));
+				String.append(fromCharCode(181) + "m");
 			else if (c==197)
 				String.append(fromCharCode(0x212B)); /* Ångström */
 			else if (allElse)
