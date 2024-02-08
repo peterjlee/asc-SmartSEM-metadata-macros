@@ -5,7 +5,7 @@
 
 <p>The annotator macro (illustrated above) allows you to overlay up to 40 operating parameters onto a copy of the image (it will also automatically add the operating parameters to the ImageJ info header so that the copy will retain this information). Alternatively you can expand the canvas to display the annotation outside the image. The main menu can be seen below. The macro can be easily modified to create a custom annotation bar containing your favorite parameters. The annotation list can include blank lines and user input. The available formats and optional colors are the same as the &quot;fancy labeling&quot; macros.</p>
 
-<p><img src="/images/CZSEM_Annotator_and MetaDataExport_Menu1_PAL64_985x1045" alt="Menu1 for SmartSEM Annotator." width="512"  /></p>
+<p><img src="/images/CZSEM_Annotator_and MetaDataExport_Menu1_PAL64_985x1045.png" alt="Menu1 for SmartSEM Annotator." width="512"  /></p>
 
 <p>The metadata-to-info macro will simply copy the embedded metadata to the ImageJ info header, allowing it to be saved with the image. The metadata-to-otherimage macro will copy the metadata to any other open image you select. The export macro will export the microscope parameters to a csv file in the same directory as the original image.</p>
 
