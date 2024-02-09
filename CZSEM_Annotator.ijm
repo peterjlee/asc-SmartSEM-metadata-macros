@@ -1,6 +1,6 @@
 /*
 	This macro adds multiple operating parameters extracted from SmartSEM metadata to a copy of the image.
-	This requires the tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
+	Early versions used the  tiff_tags plugin written by Joachim Wesner that can be downloaded from http://rsbweb.nih.gov/ij/plugins/tiff-tags.html
 	Originally it was based on the scale extracting macro here: https://rsb.info.nih.gov/ij/macros/SetScaleFromTiffTag.txt but as usual things got a little out of hand . . .
 	Peter J. Lee Applied Superconductivity Center at National High Magnetic Field Laboratory.
 	Version v170411 removes spaces in image names to fix issue with new image combinations.
@@ -15,10 +15,11 @@
 	+ v230803: Replaced getDir for 1.54g10. F1: Updated indexOf functions. f2: getColorArrayFromColorName_v230908.
 	+ v231020: Export filename option added and timestamp.
 	+ v231128: Removed "!" from showStatus for stability.  F1: Replaced function: pad.
-	+ v240118: Renames image. Updated cleanLabel function to remove odd EVO characters. f1: Updated getColorFromColorName function (012324). F2 : updated function unCleanLabel.
+	+ v240118: Renames image. Updated cleanLabel function to remove odd EVO characters. F1: Updated getColorFromColorName function (012324). F2: updated function unCleanLabel. F3: Updated sensibleUnits function.
+	+ v240209: Disappearing metadata fixed.
  */
 macro "Add Multiple Lines of CZSEM Metadata to Image" {
-	macroL = "CZSEM_Annotator_v240118-f2.ijm";
+	macroL = "CZSEM_Annotator_v240209.ijm";
 	/* We will assume you are using an up to date imageJ */
 	saveSettings; /* for restoreExit */
 	setBatchMode(true);
@@ -38,34 +39,37 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 	imagePath = getDirectory("image");
 	// Checks to see if a Ramp legend rather than the image has been selected by accident
 	if (matches(t, ".*Ramp.*")==1) showMessageWithCancel("Title contains \"Ramp\"", "Do you want to label" + t + " ?");
-	infoLines = split(getMetadata("Info"), "\n");
+	metaIJ = getMetadata("Info");
+	infoLines = split(metaIJ, "\n");
+	lInfoLines = infoLines.length;
 	iSEMName = indexOfArrayThatStartsWith(infoLines,"Sem = ",-1);
 	orPath = imagePath + getInfo("image.filename");
 	metaDataAdded = false;
-	if(iSEMName<0){
+	if(iSEMName<0 || infoLines.length<10){
 		/* If the standard CZ SEM info is missing use BioFormats to retrieve metaData */
 		headerStart = getTime();
 		if(File.exists(orPath)) {
 			fullFileString = File.openAsString(orPath);
-			smartSEMInfos = extractTIFFHeaderInfoToArray(fullFileString,"DP_","SAMPLE_ID",300,"\n",sepSpace,"End of Header",newArray("SmartSEM header not found")); /* (tag,beginTag,endTag,endBuffer,lfRep,tabRep,nulRep,default) */
+			smartSEMInfos = extractTIFFHeaderInfoToArray(fullFileString,"DP_","SAMPLE_ID",300,"\n",sepSpace,"End of Header", newArray("SmartSEM header not found")); /* (tag,beginTag,endTag,endBuffer,lfRep,tabRep,nulRep,default) */
 			headerExtracted = getTime();
-			IJ.log("Time to extract header: " + (headerExtracted-headerStart)/1000 + " s");
+			IJ.log("Time to extract header of length " + smartSEMInfos.length + ": " + (headerExtracted-headerStart)/1000 + " s");
 			if (smartSEMInfos[0]!= "SmartSEM header not found"){
-				for (i=0;i<smartSEMInfos.length;i++) smartSEMInfos = Array.deleteIndex(smartSEMInfos, i); /* For SmartSEM images ONLY: Remove unnecessary info title lines */
-				smartSEMInfoString = arrayToString(smartSEMInfos,"\n");
-				imagejInfo = getMetadata("Info");
-				if (imagejInfo==""){
-					setMetadata("Info",smartSEMInfoString);
-					IJ.log("SmartSEM header added to ImageJ metaData");
-					metaDataAdded = true;
-				}
+				for (i=0; i<smartSEMInfos.length; i++)
+					smartSEMInfos = Array.deleteIndex(smartSEMInfos, i); /* For SmartSEM images ONLY: Remove unnecessary info title lines */
+				smartSEMInfoString = arrayToString(smartSEMInfos, "\n");
+				setMetadata("Info", metaIJ + "\n" + smartSEMInfoString);
+				sInfoLines = smartSEMInfos.length;
+				IJ.log(sInfoLines + " lines of SmartSEM header added to ImageJ metaData");
+				metaDataAdded = true;
+				infoLines = Array.concat(smartSEMInfos, infoLines);
+				lInfoLines = infoLines.length;
 			}
 			fullFileString = "";
 			call("java.lang.System.gc");
 		}
 	}
 	headerExtractionComplete = getTime();
-	infoLines = split(getMetadata("Info"), "\n");
+	if (lInfoLines<10) exit("Only " + lInfoLines + " lines of metadata extracted from header");
 	iSEMName = indexOfArrayThatStartsWith(infoLines,"Sem = ",-1);
 	if (iSEMName>=0){
 		SEMName = substring(infoLines[iSEMName],6);
@@ -89,8 +93,6 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		}
 	}
 	else SEMName = "Not found";
-	lInfoLines = lengthOf(infoLines);
-	// print(lInfoLines);
 	/* clean up headers for uniformity */
 	fInfoLines = newArray;
 	for (i=0,j=0;i<lInfoLines;i++){  /* clean up SmartSEM headers for uniformity */
@@ -230,7 +232,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 	infoWarningColor = "#ff69b4"; /* pink_modern AKA hot pink */
 	infoFontSize = 12;
 	Dialog.create(zeissSEMName + " Basic Label Options: " + macroL);
-		if (metaDataAdded) Dialog.addMessage("The Zeiss metadata was added to the ImageJ metadata", infoFontSize, infoColor);
+		if (metaDataAdded) Dialog.addMessage(lInfoLines + " lines of Zeiss metadata were added to the ImageJ metadata", infoFontSize, infoColor);
 		if (imageDepth==16 || imageDepth==32) Dialog.addCheckbox("Image depth is " + imageDepth + ": Use 8-bit copy for annotation", true);
 		Dialog.addChoice("Location:", textLocChoices, textLocChoices[iTextLoc]);
 		if (selectionExists) {
@@ -448,7 +450,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 			textRows = newArray("");
 			rowText = "";
 			longestStringWidth = 0;
-			for (i=0,j=0; i<textOutNumber; i++) {
+			for (i=0, j=0; i<textOutNumber; i++) {
 				labelLength = getStringWidth(textOutputLines[i] + sepSpace);
 				rowLength = getStringWidth(rowText);
 				if ((rowLength+labelLength+2*selOffsetX) < imageWidth*(1-scaleBarPC/100))	rowText += textOutputLines[i] + sepSpace;
@@ -958,10 +960,11 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 		if (message!="") exit(message);
 		else exit;
 	}
-	function sensibleUnits(pixelW,inUnit){
+	function sensibleUnits(pixelW, inUnit){
 		/* v220805: 1st version
 			v230808: Converts inches to mm automatically.
 			v230809: Removed exit, just logs without change.
+			v240209: Does not require indexOfArray function.
 		*/
 		kUnits = newArray("m", "mm", getInfo("micrometer.abbreviation"), "nm", "pm");
 		if (inUnit=="inches"){
@@ -969,12 +972,13 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 			pixelW *= 25.4;
 			IJ.log("Inches converted to mm units");
 		}
-		if(startsWith(inUnit,"micro") || endsWith(inUnit,"ons") || inUnit=="um" || inUnit=="µm") inUnit = kUnits[2];
-		iInUnit = indexOfArray(kUnits,inUnit,-1);
-		if (iInUnit<0) IJ.log("Scale unit \(" + inUnit + "\) not in unitChoices for sensible scale function, so units not optimized");
+		if(startsWith(inUnit, "micro") || endsWith(inUnit, "ons") || inUnit=="um" || inUnit=="µm") inUnit = kUnits[2];
+		for (i=0, iInUnit=-1; i<kUnits.length; i++)
+			if (inUnit==kUnits[i]) iInUnit = i;
+		if (iInUnit<0)
+			IJ.log("Scale unit \(" + inUnit + "\) not in unitChoices for sensible scale function, so units not optimized");
 		else {
 			while (round(pixelW)>50) {
-				/* */
 				pixelW /= 1000;
 				iInUnit -= 1;
 				inUnit = kUnits[iInUnit];
@@ -985,7 +989,7 @@ macro "Add Multiple Lines of CZSEM Metadata to Image" {
 				inUnit = kUnits[iInUnit];				
 			}
 		}
-		outArray = Array.concat(pixelW,inUnit);
+		outArray = Array.concat(pixelW, inUnit);
 		return outArray;
 	}
 	function unCleanLabel(string) {
